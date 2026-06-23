@@ -1,0 +1,64 @@
+{
+  "issue": {
+    "pdf_url": "file:///Users/lahyabderrahmane/.gemini/antigravity-ide/scratch/jo-mauritanie/public/mauritanie-jo-2026-1606-ar.pdf",
+    "pdf_checksum": "ea38d1a7d74f710b4c2ccb4e4aef1e31f121a61db1d8477617f0355f25ad5295",
+    "issue_number": "",
+    "published_date": "",
+    "total_pages": 44
+  },
+  "pipeline": {
+    "pipeline_version": "3.0.0",
+    "extraction_version": "3.0.0",
+    "ai_model_version": "gemini-2.5-pro",
+    "prompt_version": "3.0.0",
+    "operator": "automated",
+    "dry_run": true,
+    "started_at": "2026-06-23T07:41:54.740348",
+    "completed_at": "2026-06-23T07:41:54.913821"
+  },
+  "extraction": {
+    "documents": 0,
+    "articles": 0,
+    "persons": 0,
+    "institutions": 0,
+    "appointments": 0,
+    "relations": 0,
+    "citations": 0,
+    "topics": 0
+  },
+  "deduplication": {
+    "documents_skipped": 0,
+    "persons_merged": 0,
+    "institutions_merged": 0
+  },
+  "quality_control": {
+    "passed": false,
+    "errors": 1,
+    "warnings": 0,
+    "error_details": [
+      {
+        "stage": "runner",
+        "code": "UNEXPECTED_ERROR",
+        "message": "cannot access local variable 'json' where it is not associated with a value",
+        "severity": "critical"
+      }
+    ],
+    "warning_details": []
+  },
+  "stages": {
+    "completed": [
+      "02_download",
+      "03_ocr"
+    ],
+    "failed": []
+  },
+  "knowledge_layer": {
+    "events": [],
+    "cards": [],
+    "collections": [],
+    "graph_nodes": [],
+    "graph_edges": [],
+    "scores": []
+  },
+  "raw_extracted": {}
+}
