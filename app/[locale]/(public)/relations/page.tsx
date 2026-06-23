@@ -18,7 +18,7 @@ export default function KnowledgeGraphPage({ params }: { params: Promise<{ local
   const isAr = resolvedParams.locale === 'ar';
   const [data, setData] = useState(MOCK_GRAPH_DATA);
   const [windowReady, setWindowReady] = useState(false);
-  const fgRef = useRef<any>();
+  const fgRef = useRef<any>(null);
 
   useEffect(() => {
     setWindowReady(true);
@@ -101,7 +101,7 @@ export default function KnowledgeGraphPage({ params }: { params: Promise<{ local
             linkCanvasObject={(link: any, ctx, globalScale) => {
               // Draw relationship label
               const MAX_FONT_SIZE = 4;
-              const LABEL_NODE_MARGIN = node => Math.sqrt(node.val || 4) * 1.5;
+              const LABEL_NODE_MARGIN = (node: any) => Math.sqrt(node.val || 4) * 1.5;
 
               const start = link.source;
               const end = link.target;
@@ -110,9 +110,10 @@ export default function KnowledgeGraphPage({ params }: { params: Promise<{ local
               if (typeof start !== 'object' || typeof end !== 'object') return;
 
               // calculate label positioning
-              const textPos = Object.assign(...['x', 'y'].map(c => ({
-                [c]: start[c] + (end[c] - start[c]) / 2 // calc middle point
-              })));
+              const textPos = {
+                x: start.x + (end.x - start.x) / 2,
+                y: start.y + (end.y - start.y) / 2
+              };
 
               const relLink = { x: end.x - start.x, y: end.y - start.y };
               const maxTextLength = Math.sqrt(Math.pow(relLink.x, 2) + Math.pow(relLink.y, 2)) - LABEL_NODE_MARGIN(start) - LABEL_NODE_MARGIN(end);

@@ -13,8 +13,10 @@ export async function askLegalAssistant(query: string, chatHistory: any[] = []) 
   // We use our semantic search engine to fetch the most relevant documents
   const searchResults = await executeSemanticSearch(query);
   
+  const results = searchResults.results || [];
+  
   // 2. Format Context
-  const contextText = searchResults.results.map((hit: any) => {
+  const contextText = results.map((hit: any) => {
     const doc = hit.document;
     return `[Document ID: ${doc.id}]\nSource System: Official Gazette\nOfficial Number: ${doc.official_number || 'N/A'}\nTitle: ${doc.title_ar}\nDate: ${new Date(doc.publication_date * 1000).toISOString().split('T')[0]}\nContent Summary/Excerpt: ${doc.content_ar.substring(0, 800)}`;
   }).join('\n\n---\n\n');
@@ -40,7 +42,7 @@ export async function askLegalAssistant(query: string, chatHistory: any[] = []) 
     
     return {
       answer: result.response.text(),
-      sources: searchResults.results.map((h: any) => ({
+      sources: results.map((h: any) => ({
         id: h.document.id,
         title: h.document.title_ar,
         number: h.document.official_number

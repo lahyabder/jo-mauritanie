@@ -48,7 +48,7 @@ export async function extractPdfText(
     useSystemFonts: true,
     // Arabic/RTL text support
     standardFontDataUrl: undefined,
-  }).promise
+  } as any).promise
 
   const totalPages = pdf.numPages
   const pages: PageExtractionResult[] = []

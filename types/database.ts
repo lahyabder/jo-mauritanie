@@ -78,6 +78,7 @@ export type UserRole = 'reader' | 'editor' | 'admin' | 'super_admin'
 
 export interface Issue {
   id: string
+  source_id: string | null
   issue_number: number
   issue_number_display: string | null
   publication_date: string          // ISO date string
@@ -161,6 +162,7 @@ export interface Person {
 
 export interface Document {
   id: string
+  source_id: string | null
   official_number: string | null
   issue_id: string
   type: DocumentType
@@ -466,6 +468,210 @@ export interface Profile {
   updated_at: string
 }
 
+export interface LegalSource {
+  id: string
+  code: string
+  name_ar: string
+  name_fr: string | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface Article {
+  id: string
+  document_id: string
+  article_number: string
+  article_title: string | null
+  order_index: number
+  page_number: number | null
+  original_text: string | null
+  ai_summary: string | null
+  keywords: string[] | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AppointmentHistory {
+  id: string
+  person_id: string
+  institution_id: string | null
+  instrument_document_id: string | null
+  instrument_issue_id: string | null
+  position_title_ar: string
+  position_title_fr: string | null
+  appointment_type: string | null
+  appointment_date: string | null
+  is_current: boolean
+  confidence: number
+  created_at: string
+}
+
+export interface LegalRelation {
+  id: string
+  source_type: string
+  source_id: string
+  target_type: string
+  target_id: string
+  relation_type: string
+  confidence: number
+  detected_sentence: string | null
+  ai_explanation: string | null
+  created_at: string
+}
+
+export interface LegalCitation {
+  id: string
+  source_document_id: string
+  source_article_id: string | null
+  target_document_id: string
+  target_article_id: string | null
+  citation_type: string | null
+  citation_sentence: string | null
+  ai_explanation: string | null
+  confidence: number
+  created_at: string
+}
+
+export interface LegalTopic {
+  id: string
+  code: string
+  name_ar: string
+  name_fr: string | null
+  created_at: string
+}
+
+export interface DocumentTopic {
+  document_id: string
+  topic_id: string
+  confidence: number
+}
+
+export interface SyncLog {
+  id: string
+  source_id: string | null
+  file_name: string | null
+  pdf_url: string | null
+  status: string
+  issue_id: string | null
+  trigger_type: string
+  triggered_by: string | null
+  issues_found: number
+  new_issues_downloaded: number
+  site_reachable: boolean
+  layout_changed: boolean
+  documents_extracted: number
+  articles_extracted: number
+  persons_extracted: number
+  institutions_extracted: number
+  appointments_extracted: number
+  relations_extracted: number
+  citations_extracted: number
+  ai_model_used: string | null
+  extraction_version: string | null
+  error_message: string | null
+  error_details: Record<string, unknown> | null
+  started_at: string
+  completed_at: string | null
+}
+
+export interface UploadJob {
+  id: string
+  issue_id: string | null
+  original_filename: string
+  pdf_storage_path: string
+  pdf_public_url: string | null
+  pdf_file_size_bytes: number | null
+  pdf_page_count: number | null
+  pdf_checksum: string | null
+  status: 'pending' | 'extracting_text' | 'running_ocr' | 'detecting_structure' | 'classifying' | 'review' | 'publishing' | 'completed' | 'failed'
+  progress_percent: number
+  current_step_label: string | null
+  total_pages_processed: number
+  documents_extracted: number
+  documents_approved: number
+  documents_published: number
+  documents_rejected: number
+  required_ocr: boolean
+  ocr_language: string
+  avg_text_confidence: number | null
+  detected_issue_number: number | null
+  detected_pub_date: string | null
+  issue_confirmed: boolean
+  error_message: string | null
+  error_details: Record<string, unknown> | null
+  retry_count: number
+  upload_completed_at: string | null
+  processing_started_at: string | null
+  processing_ended_at: string | null
+  uploaded_by: string | null
+  reviewed_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UploadJobLog {
+  id: string
+  job_id: string
+  level: 'info' | 'warn' | 'error' | 'debug'
+  message: string
+  details: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface ExtractedDocument {
+  id: string
+  job_id: string
+  document_id: string | null
+  sequence_in_issue: number
+  pdf_page_start: number | null
+  pdf_page_end: number | null
+  detected_type: DocumentType | null
+  confirmed_type: DocumentType | null
+  classification_confidence: number | null
+  classification_model: string | null
+  classification_reasons: Record<string, unknown> | null
+  detected_official_number: string | null
+  confirmed_official_number: string | null
+  detected_date: string | null
+  confirmed_date: string | null
+  detected_institution_name_ar: string | null
+  detected_institution_name_fr: string | null
+  confirmed_institution_id: string | null
+  detected_title_ar: string | null
+  detected_title_fr: string | null
+  confirmed_title_ar: string | null
+  confirmed_title_fr: string | null
+  raw_text_ar: string | null
+  raw_text_fr: string | null
+  raw_text_mixed: string | null
+  cleaned_text_ar: string | null
+  cleaned_text_fr: string | null
+  ocr_used: boolean
+  ocr_confidence: number | null
+  ocr_word_count: number | null
+  low_confidence_regions: Record<string, unknown> | null
+  has_articles: boolean
+  articles_count: number | null
+  has_preamble: boolean
+  has_signatures: boolean
+  detected_signatories: string[] | null
+  detected_keywords: string[] | null
+  ai_summary_ar: string | null
+  ai_summary_fr: string | null
+  ai_keywords: string[] | null
+  review_status: 'pending_review' | 'approved' | 'rejected' | 'published' | 'needs_correction'
+  reviewer_notes: string | null
+  corrections: Record<string, unknown> | null
+  reviewed_at: string | null
+  reviewed_by: string | null
+  published_at: string | null
+  extraction_quality_score: number | null
+  raw_metadata: Record<string, any> | null
+  created_at: string
+  updated_at: string
+}
+
 // ============================================================
 // Composite / Joined Types (for API responses)
 // ============================================================
@@ -506,7 +712,32 @@ export interface SearchResult {
 // ============================================================
 // Database type (for Supabase client typing)
 // ============================================================
-export type Database = {
+type FixRow<R> = R extends undefined ? undefined : { [K in keyof R]: R[K] };
+
+type FixTable<T> = {
+  Row: FixRow<T extends { Row: any } ? T['Row'] : undefined>
+  Insert: FixRow<T extends { Insert: any } ? T['Insert'] : undefined>
+  Update: FixRow<T extends { Update: any } ? T['Update'] : undefined>
+  Relationships: T extends { Relationships: any } ? T['Relationships'] : []
+};
+
+type FixDatabase<DB extends { public: { Tables: any; Views: any; Functions: any; Enums: any } }> = {
+  public: {
+    Tables: {
+      [TableName in keyof DB['public']['Tables']]: FixTable<DB['public']['Tables'][TableName]>
+    }
+    Views: {
+      [ViewName in keyof DB['public']['Views']]: FixTable<DB['public']['Views'][ViewName]>
+    }
+    Functions: DB['public']['Functions']
+    Enums: DB['public']['Enums']
+  }
+}
+
+// ============================================================
+// Database type (for Supabase client typing)
+// ============================================================
+type RawDatabase = {
   public: {
     Tables: {
       issues:               { Row: Issue;          Insert: Partial<Issue>;          Update: Partial<Issue> }
@@ -528,11 +759,25 @@ export type Database = {
       search_index:         { Row: SearchIndexEntry; Insert: Partial<SearchIndexEntry>; Update: Partial<SearchIndexEntry> }
       statistics:           { Row: Statistic;      Insert: Partial<Statistic>;      Update: Partial<Statistic> }
       profiles:             { Row: Profile;        Insert: Partial<Profile>;        Update: Partial<Profile> }
+      legal_sources:        { Row: LegalSource;    Insert: Partial<LegalSource>;    Update: Partial<LegalSource> }
+      articles:             { Row: Article;        Insert: Partial<Article>;        Update: Partial<Article> }
+      appointment_history:  { Row: AppointmentHistory; Insert: Partial<AppointmentHistory>; Update: Partial<AppointmentHistory> }
+      legal_relations:      { Row: LegalRelation;  Insert: Partial<LegalRelation>;  Update: Partial<LegalRelation> }
+      legal_citations:      { Row: LegalCitation;  Insert: Partial<LegalCitation>;  Update: Partial<LegalCitation> }
+      legal_topics:         { Row: LegalTopic;     Insert: Partial<LegalTopic>;     Update: Partial<LegalTopic> }
+      document_topics:      { Row: DocumentTopic;  Insert: Partial<DocumentTopic>;  Update: Partial<DocumentTopic> }
+      sync_logs:            { Row: SyncLog;        Insert: Partial<SyncLog>;        Update: Partial<SyncLog> }
+      upload_jobs:          { Row: UploadJob;      Insert: Partial<UploadJob>;      Update: Partial<UploadJob> }
+      upload_job_logs:      { Row: UploadJobLog;   Insert: Partial<UploadJobLog>;   Update: Partial<UploadJobLog> }
+      extracted_documents:  { Row: ExtractedDocument; Insert: Partial<ExtractedDocument>; Update: Partial<ExtractedDocument> }
     }
     Views: {
       v_latest_issues:           { Row: Issue & { total_documents: number } }
       v_documents_with_institution: { Row: DocumentWithMeta }
       v_recent_appointments:     { Row: AppointmentWithRelations }
+      entities:                  { Row: { id: string; name_ar: string; name_fr: string | null; entity_type: 'person' | 'institution' } }
+      document_entities:         { Row: { document_id: string; entity_id: string; entity_type: 'person' | 'institution'; role: string | null } }
+      timeline_events:           { Row: { id: string; date: string; title: string; description: string | null; type: string; entity: string | null; reference_number: string | null; color: string } }
     }
     Functions: {
       search_all: {
@@ -565,8 +810,28 @@ export type Database = {
         Args: { p_person_id: string }
         Returns: AppointmentWithRelations[]
       }
-      is_admin:           { Args: Record<never, never>; Returns: boolean }
+            is_admin:           { Args: Record<never, never>; Returns: boolean }
       is_editor_or_above: { Args: Record<never, never>; Returns: boolean }
+      match_person_fuzzy: {
+        Args: {
+          p_name: string
+          p_threshold?: number
+        }
+        Returns: Array<{ id: string; full_name_ar: string; similarity: number }>
+      }
+      match_institution_fuzzy: {
+        Args: {
+          p_name: string
+          p_threshold?: number
+        }
+        Returns: Array<{ id: string; name_ar: string; similarity: number }>
+      }
+      compute_extraction_quality_for_job: {
+        Args: {
+          p_job_id: string
+        }
+        Returns: unknown
+      }
     }
     Enums: {
       document_type:        DocumentType
@@ -580,3 +845,5 @@ export type Database = {
     }
   }
 }
+
+export type Database = FixDatabase<RawDatabase>;

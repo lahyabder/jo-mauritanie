@@ -192,3 +192,33 @@ CREATE INDEX idx_page_views_user     ON page_views(user_id);
 CREATE INDEX idx_page_views_time     ON page_views(viewed_at DESC);
 
 COMMENT ON TABLE page_views IS 'Partitioned by quarter for efficient archival and pruning. Always insert into parent table; PostgreSQL routes to correct partition automatically.';
+
+-- ------------------------------------
+-- TABLE: legal_topics
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_topics (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code                TEXT UNIQUE NOT NULL,
+    name_ar             TEXT NOT NULL,
+    name_fr             TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+INSERT INTO public.legal_topics (code, name_ar, name_fr) VALUES
+  ('mining', 'المعادن والمحاجر', 'Mines et carrières'),
+  ('public_finance', 'المالية العامة', 'Finances publiques'),
+  ('administration', 'الإدارة العامة والتعيينات', 'Administration publique')
+ON CONFLICT (code) DO NOTHING;
+
+-- ------------------------------------
+-- TABLE: document_topics
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.document_topics (
+    document_id         UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    topic_id            UUID REFERENCES public.legal_topics(id) ON DELETE CASCADE,
+    confidence          REAL DEFAULT 1.0,
+    PRIMARY KEY (document_id, topic_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_topics_doc ON public.document_topics(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_topics_top ON public.document_topics(topic_id);

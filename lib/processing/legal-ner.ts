@@ -1,7 +1,7 @@
 // lib/processing/legal-ner.ts
 // AI Named Entity Recognition specifically for Legal Relationships
 
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -14,7 +14,7 @@ export interface ExtractedLegalRelation {
   descriptionAr?: string;            // Brief description of the relation/effect
 }
 
-const LegalRelationSchema = {
+const LegalRelationSchema: any = {
   type: SchemaType.OBJECT,
   properties: {
     relations: {
@@ -73,7 +73,7 @@ export async function extractLegalRelations(text: string): Promise<ExtractedLega
       model: "gemini-1.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: LegalRelationSchema,
+        responseSchema: LegalRelationSchema as any,
         temperature: 0.1,
       }
     });

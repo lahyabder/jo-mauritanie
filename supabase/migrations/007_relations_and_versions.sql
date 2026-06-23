@@ -176,3 +176,42 @@ CREATE TABLE document_institutions (
 CREATE INDEX idx_doc_institutions_document    ON document_institutions(document_id);
 CREATE INDEX idx_doc_institutions_institution ON document_institutions(institution_id);
 CREATE INDEX idx_doc_institutions_role_type   ON document_institutions(role_type);
+
+-- ------------------------------------
+-- TABLE: legal_relations
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_relations (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_type         TEXT NOT NULL,
+    source_id           UUID NOT NULL,
+    target_type         TEXT NOT NULL,
+    target_id           UUID NOT NULL,
+    relation_type       TEXT NOT NULL,
+    confidence          REAL DEFAULT 1.0,
+    detected_sentence   TEXT,
+    ai_explanation      TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_relations_source ON public.legal_relations(source_id);
+CREATE INDEX IF NOT EXISTS idx_legal_relations_target ON public.legal_relations(target_id);
+
+-- ------------------------------------
+-- TABLE: legal_citations
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_citations (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_document_id  UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    source_article_id   UUID REFERENCES public.articles(id) ON DELETE SET NULL,
+    target_document_id  UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    target_article_id   UUID REFERENCES public.articles(id) ON DELETE SET NULL,
+    citation_type       TEXT,
+    citation_sentence   TEXT,
+    ai_explanation      TEXT,
+    confidence          REAL DEFAULT 1.0,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_citations_source_doc ON public.legal_citations(source_document_id);
+CREATE INDEX IF NOT EXISTS idx_legal_citations_target_doc ON public.legal_citations(target_document_id);
+

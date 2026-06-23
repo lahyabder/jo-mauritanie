@@ -4,6 +4,7 @@
 
 CREATE TABLE issues (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_id           UUID REFERENCES public.legal_sources(id) ON DELETE SET NULL,
   
   -- Official identification
   issue_number        INTEGER NOT NULL UNIQUE,                    -- Official JO number (e.g. 1456)

@@ -116,8 +116,7 @@ export async function processUploadJob(jobId: string) {
       const aiMeta = await extractDocumentMetadata(doc.text);
       
       if (aiMeta) {
-        // Insert into extracted_documents staging table
-        const { error: insertError } = await supabase.from('extracted_documents').insert({
+        const { data: insertedDoc, error: insertError } = await supabase.from('extracted_documents').insert({
           job_id: jobId,
           sequence_in_issue: doc.sequence,
           pdf_page_start: doc.startPage,
@@ -242,10 +241,12 @@ export async function processUploadJob(jobId: string) {
     }
 
     // 7. Calculate quality scores via Postgres function
-    await supabase.rpc('compute_extraction_quality_for_job', { p_job_id: jobId }).catch(e => {
-        // Ignore if RPC doesn't exist yet, we wrote the individual compute_extraction_quality function
-        console.warn("Batch RPC not available, skipping batch quality score calculation.");
-    });
+    try {
+      await supabase.rpc('compute_extraction_quality_for_job', { p_job_id: jobId } as any);
+    } catch (e) {
+      // Ignore if RPC doesn't exist yet, we wrote the individual compute_extraction_quality function
+      console.warn("Batch RPC not available, skipping batch quality score calculation.");
+    }
 
     // 8. Finalize Job
     await updateStatus('review', 100, 'Processing complete. Ready for human review.');

@@ -15,6 +15,7 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<any[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const supabase = createClient();
 
   const handleSearch = async (e: React.FormEvent) => {

@@ -117,3 +117,20 @@ CREATE TYPE stats_period AS ENUM (
   'quarterly',
   'yearly'
 );
+
+-- ------------------------------------
+-- TABLE: legal_sources (e.g. Official Gazette)
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_sources (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code                TEXT UNIQUE NOT NULL,
+    name_ar             TEXT NOT NULL,
+    name_fr             TEXT,
+    is_active           BOOLEAN DEFAULT TRUE,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+INSERT INTO public.legal_sources (code, name_ar, name_fr)
+VALUES ('official_gazette', 'الجريدة الرسمية', 'Journal Officiel')
+ON CONFLICT (code) DO NOTHING;
+

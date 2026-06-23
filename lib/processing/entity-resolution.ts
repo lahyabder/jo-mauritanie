@@ -1,7 +1,7 @@
 // lib/processing/entity-resolution.ts
 // Resolves extracted entities against the database to prevent duplicates and manage aliases
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database';
 import { ExtractedPerson, ExtractedInstitution, ExtractedEvent } from './ner-engine';
 
@@ -12,7 +12,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SIMILARITY_THRESHOLD = 0.85;
 
 export async function resolvePerson(
-  supabase: ReturnType<typeof createClient<Database>>,
+  supabase: SupabaseClient<Database>,
   person: ExtractedPerson
 ): Promise<string> {
   // 1. Check exact match in aliases or persons
@@ -78,7 +78,7 @@ export async function resolvePerson(
 }
 
 export async function resolveInstitution(
-  supabase: ReturnType<typeof createClient<Database>>,
+  supabase: SupabaseClient<Database>,
   institution: ExtractedInstitution
 ): Promise<string> {
   const { data: exact } = await supabase
@@ -123,7 +123,7 @@ export async function resolveInstitution(
 }
 
 export async function resolveDocument(
-  supabase: ReturnType<typeof createClient<Database>>,
+  supabase: SupabaseClient<Database>,
   referenceText: string,
   docNumber?: string
 ): Promise<string | null> {

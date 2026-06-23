@@ -52,19 +52,20 @@ export async function runOcrOnPages(
       preserve_interword_spaces: '1',
     })
 
-    const {
-      data: { text, confidence, words },
-    } = await worker.recognize(buffer)
+        const { data } = await worker.recognize(buffer as any) as any;
+    const text = data.text || '';
+    const confidence = data.confidence || 0;
+    const words = data.words || [];
 
-    await worker.terminate()
+    await worker.terminate();
 
-    const lowConfidenceWords = (words || [])
+    const lowConfidenceWords = (words as any[])
       .filter((w) => w.confidence < 60)
       .map((w) => ({
         text: w.text,
         confidence: w.confidence,
         bbox: w.bbox,
-      }))
+      }));
 
     results.push({
       pageNumber,

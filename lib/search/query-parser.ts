@@ -1,7 +1,7 @@
 // lib/search/query-parser.ts
 // Uses Gemini to parse a Natural Language query and execute a Hybrid Vector/Keyword search on Typesense.
 
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 import { typesenseClient } from './typesense-client';
 import { generateEmbedding } from './embeddings';
 
@@ -13,7 +13,7 @@ interface ParsedQuery {
   isQuestion: boolean;
 }
 
-const QueryParserSchema = {
+const QueryParserSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
     extractedKeywords: {
@@ -42,7 +42,7 @@ export async function executeSemanticSearch(userQuery: string) {
         model: "gemini-1.5-flash",
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: QueryParserSchema,
+          responseSchema: QueryParserSchema as any,
           temperature: 0,
         }
       });

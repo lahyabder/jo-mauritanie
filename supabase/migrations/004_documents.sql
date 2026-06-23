@@ -6,6 +6,7 @@
 
 CREATE TABLE documents (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_id             UUID REFERENCES public.legal_sources(id) ON DELETE SET NULL,
   
   -- -------------------------------------------------------
   -- Required fields (every document must have these)
@@ -185,3 +186,25 @@ COMMENT ON COLUMN documents.parent_id IS 'Points to previous version of the same
 COMMENT ON COLUMN documents.permanent_url IS 'Canonical immutable URL. Set on first publish and never changed.';
 COMMENT ON COLUMN documents.pdf_page_start IS 'Page number within the full gazette issue PDF where this document begins (1-indexed).';
 COMMENT ON COLUMN documents.search_vector IS 'Auto-maintained GIN-indexed tsvector for multilingual full-text search across Arabic and French.';
+
+-- ------------------------------------
+-- TABLE: articles
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.articles (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id         UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+  article_number      TEXT NOT NULL,
+  article_title       TEXT,
+  order_index         INTEGER DEFAULT 0,
+  page_number         INTEGER,
+  original_text       TEXT,
+  ai_summary          TEXT,
+  keywords            TEXT[],
+  status              TEXT DEFAULT 'active',
+  created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_articles_document ON public.articles(document_id);
+CREATE INDEX IF NOT EXISTS idx_articles_number   ON public.articles(article_number);
+

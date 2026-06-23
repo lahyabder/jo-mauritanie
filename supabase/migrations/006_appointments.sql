@@ -92,3 +92,26 @@ CREATE TRIGGER set_updated_at_appointments
 
 COMMENT ON TABLE appointments IS 'Individual appointments extracted from decrees and decisions. Multiple appointments can exist in a single document.';
 COMMENT ON COLUMN appointments.person_name_ar IS 'Name as written in the official text. May not match persons.full_name_ar exactly.';
+
+-- ------------------------------------
+-- TABLE: appointment_history
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.appointment_history (
+    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    person_id               UUID REFERENCES public.persons(id) ON DELETE CASCADE,
+    institution_id          UUID REFERENCES public.institutions(id) ON DELETE SET NULL,
+    instrument_document_id  UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    instrument_issue_id     UUID REFERENCES public.issues(id) ON DELETE CASCADE,
+    position_title_ar       TEXT NOT NULL,
+    position_title_fr       TEXT,
+    appointment_type        TEXT,
+    appointment_date        DATE,
+    is_current              BOOLEAN DEFAULT TRUE,
+    confidence              REAL DEFAULT 1.0,
+    created_at              TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_appointment_history_person ON public.appointment_history(person_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_history_inst   ON public.appointment_history(institution_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_history_doc    ON public.appointment_history(instrument_document_id);
+

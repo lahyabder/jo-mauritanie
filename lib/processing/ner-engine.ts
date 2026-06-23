@@ -1,7 +1,7 @@
 // lib/processing/ner-engine.ts
 // AI Named Entity Recognition (NER) for Persons, Institutions, and Events
 
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -37,7 +37,7 @@ export interface NERResult {
   events: ExtractedEvent[];
 }
 
-const NERSchema = {
+const NERSchema: any = {
   type: SchemaType.OBJECT,
   properties: {
     persons: {
@@ -109,7 +109,7 @@ export async function runNERExtraction(text: string): Promise<NERResult | null> 
       model: "gemini-1.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: NERSchema,
+        responseSchema: NERSchema as any,
         temperature: 0.1,
       }
     });

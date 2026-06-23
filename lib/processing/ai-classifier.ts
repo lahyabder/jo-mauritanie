@@ -108,7 +108,7 @@ export async function extractDocumentMetadata(text: string): Promise<AIExtractio
       model: "gemini-1.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: ExtractionSchema,
+        responseSchema: ExtractionSchema as any,
         temperature: 0.1, // Low temperature for factual extraction
       }
     });
