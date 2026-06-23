@@ -672,6 +672,128 @@ export interface ExtractedDocument {
   updated_at: string
 }
 
+export interface LegalEvent {
+  id: string
+  event_type: string
+  category: string
+  title_ar: string
+  title_fr: string | null
+  description_ar: string | null
+  description_fr: string | null
+  event_date: string | null
+  event_date_end: string | null
+  document_id: string | null
+  article_id: string | null
+  person_id: string | null
+  institution_id: string | null
+  issue_id: string | null
+  ai_generated: boolean
+  confidence: number
+  knowledge_version: string | null
+  created_at: string
+}
+
+export interface KnowledgeCard {
+  id: string
+  entity_type: string
+  entity_id: string
+  card_type: string
+  title_ar: string
+  title_fr: string | null
+  content_ar: string
+  content_fr: string | null
+  stats_json: Record<string, unknown> | null
+  ai_model_version: string | null
+  knowledge_version: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DocumentCollection {
+  id: string
+  code: string | null
+  title_ar: string
+  title_fr: string | null
+  description_ar: string | null
+  description_fr: string | null
+  collection_type: string
+  filter_json: Record<string, unknown> | null
+  document_count: number
+  color: string | null
+  icon: string | null
+  is_auto: boolean
+  is_featured: boolean
+  knowledge_version: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CollectionDocument {
+  collection_id: string
+  document_id: string
+  order_index: number
+  relevance_score: number
+}
+
+export interface SemanticLink {
+  id: string
+  source_type: string
+  source_id: string
+  target_type: string
+  target_id: string
+  similarity_score: number
+  link_type: string | null
+  explanation_ar: string | null
+  knowledge_version: string | null
+  created_at: string
+}
+
+export interface AiNarrative {
+  id: string
+  entity_type: string
+  entity_id: string
+  narrative_type: string
+  narrative_ar: string
+  narrative_fr: string | null
+  period_start: string | null
+  period_end: string | null
+  ai_model_version: string | null
+  knowledge_version: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface KnowledgeScore {
+  document_id: string
+  citation_score: number
+  amendment_score: number
+  reference_score: number
+  entity_score: number
+  total_score: number
+  percentile_rank: number | null
+  knowledge_version: string | null
+  last_computed_at: string | null
+}
+
+export interface KgNode {
+  id: string
+  source_id: string
+  node_type: string
+  label: string
+  properties: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface KgEdge {
+  id: string
+  source_node: string
+  target_node: string
+  relationship_type: string
+  properties: Record<string, unknown>
+  created_at: string
+}
+
 // ============================================================
 // Composite / Joined Types (for API responses)
 // ============================================================
@@ -770,6 +892,15 @@ type RawDatabase = {
       upload_jobs:          { Row: UploadJob;      Insert: Partial<UploadJob>;      Update: Partial<UploadJob> }
       upload_job_logs:      { Row: UploadJobLog;   Insert: Partial<UploadJobLog>;   Update: Partial<UploadJobLog> }
       extracted_documents:  { Row: ExtractedDocument; Insert: Partial<ExtractedDocument>; Update: Partial<ExtractedDocument> }
+      legal_events:         { Row: LegalEvent;     Insert: Partial<LegalEvent>;     Update: Partial<LegalEvent> }
+      knowledge_cards:      { Row: KnowledgeCard;  Insert: Partial<KnowledgeCard>;  Update: Partial<KnowledgeCard> }
+      document_collections: { Row: DocumentCollection; Insert: Partial<DocumentCollection>; Update: Partial<DocumentCollection> }
+      collection_documents: { Row: CollectionDocument; Insert: Partial<CollectionDocument>; Update: Partial<CollectionDocument> }
+      semantic_links:       { Row: SemanticLink;    Insert: Partial<SemanticLink>;    Update: Partial<SemanticLink> }
+      ai_narratives:        { Row: AiNarrative;     Insert: Partial<AiNarrative>;     Update: Partial<AiNarrative> }
+      knowledge_scores:     { Row: KnowledgeScore;  Insert: Partial<KnowledgeScore>;  Update: Partial<KnowledgeScore> }
+      kg_nodes:             { Row: KgNode;          Insert: Partial<KgNode>;          Update: Partial<KgNode> }
+      kg_edges:             { Row: KgEdge;          Insert: Partial<KgEdge>;          Update: Partial<KgEdge> }
     }
     Views: {
       v_latest_issues:           { Row: Issue & { total_documents: number } }

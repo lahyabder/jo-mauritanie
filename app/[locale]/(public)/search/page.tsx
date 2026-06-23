@@ -28,8 +28,8 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
     try {
       const { data, error } = await supabase
         .from('documents')
-        .select('*')
-        .or(`title.ilike.%${query}%,snippet.ilike.%${query}%,full_text.ilike.%${query}%`)
+        .select('*, issues(issue_number)')
+        .or(`title_ar.ilike.%${query}%,title_fr.ilike.%${query}%,content_ar.ilike.%${query}%,content_fr.ilike.%${query}%`)
         .limit(20);
         
       if (error) throw error;
@@ -118,7 +118,9 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
                <div key={result.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow group">
                  <div className="flex justify-between items-start mb-2">
                    <h3 className="text-xl font-bold text-indigo-900 group-hover:text-indigo-600 transition-colors">
-                     <Link href={`/${locale}/documents/${result.id}`}>{result.title}</Link>
+                     <Link href={`/${locale}/documents/${result.id}`}>
+                       {isAr ? result.title_ar : (result.title_fr || result.title_ar)}
+                     </Link>
                    </h3>
                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-md border border-indigo-100">
                      {isAr ? 'تطابق نصي' : 'Keyword Match'}
@@ -127,12 +129,12 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
                  
                  <div className="flex flex-wrap gap-3 mb-4 text-xs font-medium text-gray-500">
                    <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><FileText className="w-3 h-3 mr-1 ml-1" /> {result.type}</span>
-                   <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><BookOpen className="w-3 h-3 mr-1 ml-1" /> {result.issue_number || 'N/A'}</span>
-                   <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><Calendar className="w-3 h-3 mr-1 ml-1" /> {result.published_date || 'N/A'}</span>
+                   <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><BookOpen className="w-3 h-3 mr-1 ml-1" /> {result.issues?.issue_number || 'N/A'}</span>
+                   <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><Calendar className="w-3 h-3 mr-1 ml-1" /> {result.document_date || 'N/A'}</span>
                  </div>
                  
                  <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                   {result.snippet || result.title}
+                   {isAr ? (result.summary_ar || result.title_ar) : (result.summary_fr || result.summary_ar || result.title_fr || result.title_ar)}
                  </p>
                  
                  <div className="pt-4 border-t border-gray-50 flex gap-4">

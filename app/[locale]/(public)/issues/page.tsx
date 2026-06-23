@@ -21,7 +21,7 @@ export default function IssuesPage({ params }: { params: Promise<{ locale: strin
           *,
           documents ( count )
         `)
-        .order('published_date', { ascending: false });
+        .order('publication_date', { ascending: false });
         
       if (data) setIssues(data);
       setLoading(false);
@@ -67,7 +67,7 @@ export default function IssuesPage({ params }: { params: Promise<{ locale: strin
               <div className="space-y-3 mb-6">
                 <div className="flex items-center text-sm text-gray-600">
                   <Calendar className="w-4 h-4 mr-2 ml-2 text-gray-400" />
-                  {issue.published_date}
+                  {issue.publication_date}
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <FileText className="w-4 h-4 mr-2 ml-2 text-gray-400" />

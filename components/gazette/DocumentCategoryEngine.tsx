@@ -39,7 +39,7 @@ export default function DocumentCategoryEngine({
         .from('documents')
         .select('*, issues(issue_number, pdf_url)')
         .eq('type', documentType)
-        .order('published_date', { ascending: false })
+        .order('document_date', { ascending: false })
         .limit(10);
         
       if (docs) setDocuments(docs);
@@ -55,7 +55,7 @@ export default function DocumentCategoryEngine({
         .from('documents')
         .select('id', { count: 'exact', head: true })
         .eq('type', documentType)
-        .gte('published_date', `${currentYear}-01-01`);
+        .gte('document_date', `${currentYear}-01-01`);
         
       setStats({
         total: totalCount || 0,
@@ -139,13 +139,17 @@ export default function DocumentCategoryEngine({
               {documents.map((doc) => (
                 <div key={doc.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow group">
                   <h3 className="text-xl font-bold text-indigo-900 group-hover:text-indigo-600 transition-colors mb-2">
-                    <Link href={`/${locale}/documents/${doc.id}`}>{doc.title}</Link>
+                    <Link href={`/${locale}/documents/${doc.id}`}>
+                      {isAr ? doc.title_ar : (doc.title_fr || doc.title_ar)}
+                    </Link>
                   </h3>
                   <div className="flex flex-wrap gap-3 mb-4 text-xs font-medium text-gray-500">
-                    <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><Calendar className="w-3 h-3 mr-1 ml-1" /> {doc.published_date || 'N/A'}</span>
+                    <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><Calendar className="w-3 h-3 mr-1 ml-1" /> {doc.document_date || 'N/A'}</span>
                     <span className="flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100"><BookOpen className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'العدد' : 'Issue'} {doc.issues?.issue_number || 'N/A'}</span>
                   </div>
-                  <p className="text-gray-600 text-sm leading-relaxed mb-4">{doc.snippet || doc.title}</p>
+                  <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                    {isAr ? (doc.summary_ar || doc.title_ar) : (doc.summary_fr || doc.summary_ar || doc.title_fr || doc.title_ar)}
+                  </p>
                   <Link href={`/${locale}/documents/${doc.id}`} className="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
                     {isAr ? 'قراءة التفاصيل' : 'Read Details'} 
                     {isAr ? <ArrowLeft className="w-4 h-4 mr-1" /> : <ArrowRight className="w-4 h-4 ml-1" />}

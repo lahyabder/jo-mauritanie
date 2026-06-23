@@ -55,20 +55,12 @@ export async function POST(request: NextRequest) {
       .from('issues')
       .insert({
         source_id: sourceId,
-        issue_number: issueData.issue_number || 'unknown',
-        year,
-        month,
-        published_date: publishedDate,
-        language: 'ar',
+        issue_number: parseInt(issueData.issue_number, 10) || 0,
+        publication_date: publishedDate || new Date().toISOString().split('T')[0],
         pdf_url: issueData.pdf_url || '',
         pdf_checksum: issueData.pdf_checksum || '',
-        total_pages: issueData.total_pages || 0,
-        ocr_status: 'not_required',
-        processing_status: 'done',
-        total_documents: extraction.documents || 0,
-        extraction_version: pipeline.extraction_version || '1.0.0',
-        ai_version: pipeline.ai_model_version || 'gemini-2.5-pro',
-        import_source: 'review_dashboard'
+        pdf_page_count: issueData.total_pages || 0,
+        is_published: true
       })
       .select()
       .single();
@@ -89,23 +81,24 @@ export async function POST(request: NextRequest) {
     const institutions = manifest.raw_extracted?.institutions || [];
     for (const inst of institutions) {
       const localId = inst.local_id;
-      // Deduplicate by official_name_ar
+      // Deduplicate by name_ar
       const { data: existingInst } = await supabase
         .from('institutions')
         .select('id')
-        .eq('official_name_ar', inst.official_name_ar)
+        .eq('name_ar', inst.official_name_ar)
         .maybeSingle();
 
       if (existingInst) {
         idMap[localId] = { id: existingInst.id, type: 'institution' };
       } else {
+        const validCategory = (inst.type === 'ministry' || inst.type === 'presidency' || inst.type === 'parliament' || inst.type === 'constitutional_council' || inst.type === 'supreme_court' || inst.type === 'public_agency' || inst.type === 'regional_authority' || inst.type === 'municipality' || inst.type === 'public_enterprise') ? inst.type : 'other';
         const { data: newInst, error: instErr } = await supabase
           .from('institutions')
           .insert({
-            official_name_ar: inst.official_name_ar,
-            official_name_fr: inst.official_name_fr || null,
-            type: inst.type || 'agency',
-            status: inst.status || 'active'
+            name_ar: inst.official_name_ar,
+            name_fr: inst.official_name_fr || null,
+            category: validCategory,
+            is_active: inst.status !== 'inactive'
           })
           .select()
           .single();
@@ -121,24 +114,26 @@ export async function POST(request: NextRequest) {
     const persons = manifest.raw_extracted?.persons || [];
     for (const person of persons) {
       const localId = person.local_id;
-      // Deduplicate by normalized_name
+      // Deduplicate by full_name_ar
       const { data: existingPerson } = await supabase
         .from('persons')
         .select('id')
-        .eq('normalized_name', person.normalized_name || person.full_name_ar)
+        .eq('full_name_ar', person.full_name_ar)
         .maybeSingle();
 
       if (existingPerson) {
         idMap[localId] = { id: existingPerson.id, type: 'person' };
       } else {
+        const genderVal = (person.gender === 'male' || person.gender === 'M') ? 'M' : (person.gender === 'female' || person.gender === 'F') ? 'F' : null;
         const { data: newPerson, error: personErr } = await supabase
           .from('persons')
           .insert({
             full_name_ar: person.full_name_ar,
             full_name_fr: person.full_name_fr || null,
-            normalized_name: person.normalized_name || person.full_name_ar,
-            gender: person.gender || 'unknown',
-            current_position: person.current_position || null
+            gender: genderVal,
+            current_role_title_ar: person.current_position || null,
+            current_role: 'other',
+            is_active: true
           })
           .select()
           .single();
@@ -154,28 +149,25 @@ export async function POST(request: NextRequest) {
     const documents = manifest.raw_extracted?.documents || [];
     for (const doc of documents) {
       const localId = doc.local_id;
+      const docType = (doc.type === 'law' || doc.type === 'decree' || doc.type === 'decision' || doc.type === 'regulation' || doc.type === 'circular' || doc.type === 'announcement' || doc.type === 'notification' || doc.type === 'appointment') ? doc.type : 'other';
       const { data: newDoc, error: docErr } = await supabase
         .from('documents')
         .insert({
           issue_id: issueId,
           source_id: sourceId,
+          type: docType,
           official_number: doc.official_number || null,
           title_ar: doc.title_ar,
           title_fr: doc.title_fr || null,
-          short_title_ar: doc.short_title_ar || null,
-          page_start: doc.page_start || 0,
-          page_end: doc.page_end || 0,
-          published_date: doc.published_date || publishedDate,
-          language: doc.language || 'ar',
-          original_text: doc.original_text || '',
+          pdf_page_start: doc.page_start || 0,
+          pdf_page_end: doc.page_end || 0,
+          document_date: doc.published_date || publishedDate || new Date().toISOString().split('T')[0],
+          original_language: (doc.language === 'fr' || doc.language === 'en') ? doc.language : 'ar',
+          content_ar: doc.language === 'ar' || !doc.language ? (doc.original_text || '') : null,
+          content_fr: doc.language === 'fr' ? (doc.original_text || '') : null,
           ai_summary_ar: doc.ai_summary_ar || null,
           keywords: doc.keywords || [],
-          status: 'published', // reviewers mark as published directly on commit
-          confidence_score: doc.confidence_score || 1.0,
-          pipeline_version: pipeline.pipeline_version || '3.0.0',
-          extraction_version: pipeline.extraction_version || '1.0.0',
-          ai_version: pipeline.ai_model_version || 'gemini-2.5-pro',
-          import_source: 'review_dashboard'
+          status: 'published' // reviewers mark as published directly on commit
         })
         .select()
         .single();
