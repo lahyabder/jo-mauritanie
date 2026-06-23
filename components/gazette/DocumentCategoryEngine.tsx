@@ -2,9 +2,23 @@
 
 import { use, useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { FileText, Calendar, BookOpen, Search, ArrowLeft, ArrowRight, BarChart2, Activity } from 'lucide-react';
+import { 
+  FileText, Calendar, BookOpen, Search, ArrowLeft, ArrowRight, BarChart2, Activity,
+  Bell, BookMarked, FileSignature, Gavel, Megaphone, Scale, Send
+} from 'lucide-react';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/ui/Breadcrumbs';
+
+const iconMap: Record<string, React.ComponentType<any>> = {
+  'bell': Bell,
+  'book-marked': BookMarked,
+  'file-signature': FileSignature,
+  'gavel': Gavel,
+  'megaphone': Megaphone,
+  'scale': Scale,
+  'send': Send,
+  'file-text': FileText
+};
 
 interface EngineProps {
   locale: string;
@@ -23,10 +37,11 @@ export default function DocumentCategoryEngine({
   titleFr, 
   descriptionAr, 
   descriptionFr,
-  icon: Icon = FileText 
+  icon 
 }: EngineProps) {
   const isAr = locale === 'ar';
   const supabase = createClient();
+  const Icon = (typeof icon === 'string' ? iconMap[icon] : icon) || FileText;
   
   const [documents, setDocuments] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, thisYear: 0 });

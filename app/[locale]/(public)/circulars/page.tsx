@@ -1,5 +1,4 @@
 import DocumentCategoryEngine from '@/components/gazette/DocumentCategoryEngine';
-import { Send } from 'lucide-react';
 
 export default async function CircularsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -11,7 +10,7 @@ export default async function CircularsPage({ params }: { params: Promise<{ loca
       titleFr="Circulaires" 
       descriptionAr="تصفح كافة التعميمات والمذكرات الإدارية."
       descriptionFr="Parcourir toutes les circulaires et notes administratives."
-      icon={Send}
+      icon="send"
     />
   );
 }

@@ -1,5 +1,4 @@
 import DocumentCategoryEngine from '@/components/gazette/DocumentCategoryEngine';
-import { Megaphone } from 'lucide-react';
 
 export default async function AnnouncementsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -11,7 +10,7 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
       titleFr="Annonces" 
       descriptionAr="تصفح كافة الإعلانات الرسمية المنشورة."
       descriptionFr="Parcourir toutes les annonces officielles publiées."
-      icon={Megaphone}
+      icon="megaphone"
     />
   );
 }
