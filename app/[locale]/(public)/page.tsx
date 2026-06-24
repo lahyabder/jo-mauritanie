@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import { 
   Search, BookOpen, Clock, GitMerge, Zap, 
   Scale, FileSignature, BookMarked, Gavel, Send, Bell, Megaphone,
-  Users, Building, BarChart3, ArrowLeft, ArrowRight
+  Users, Building, BarChart3, ArrowLeft, ArrowRight, Brain
 } from 'lucide-react';
 
 export default function LandingPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -49,6 +49,7 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
     { titleAr: 'التسلسل الزمني', titleFr: 'Chronologie', href: `/${locale}/timeline`, icon: Clock, color: 'bg-rose-600 text-white' },
     { titleAr: 'العلاقات القانونية', titleFr: 'Relations Juridiques', href: `/${locale}/relations`, icon: GitMerge, color: 'bg-red-600 text-white' },
     { titleAr: 'الإحصائيات', titleFr: 'Statistiques', href: `/${locale}/statistics`, icon: BarChart3, color: 'bg-slate-700 text-white' },
+    { titleAr: 'طبقة المعرفة', titleFr: 'Knowledge Layer', href: `/${locale}/knowledge`, icon: Brain, color: 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white' },
   ];
 
   return (
