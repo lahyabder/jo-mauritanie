@@ -22,14 +22,33 @@ export async function POST(req: NextRequest) {
     let fileName: string;
 
     if (file) {
+      // ── Ensure bucket exists (auto-create if missing) ───────────────────────
+      const BUCKET = 'gazette-pdfs';
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const bucketExists = buckets?.some((b) => b.id === BUCKET);
+      if (!bucketExists) {
+        const { error: createErr } = await supabase.storage.createBucket(BUCKET, {
+          public: true,
+          fileSizeLimit: 52428800, // 50 MB
+          allowedMimeTypes: ['application/pdf'],
+        });
+        if (createErr) {
+          console.error('Failed to create storage bucket:', createErr);
+          return NextResponse.json(
+            { error: `Storage bucket creation failed: ${createErr.message}` },
+            { status: 500 }
+          );
+        }
+      }
+
       // ── Upload to Supabase Storage ─────────────────────────────────────────
       fileName = file.name;
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
 
-      const storageKey = `gazette-pdfs/${Date.now()}_${fileName}`;
+      const storageKey = `${Date.now()}_${fileName}`;
       const { error: storageError } = await supabase.storage
-        .from('gazette-pdfs')
+        .from(BUCKET)
         .upload(storageKey, bytes, { contentType: 'application/pdf', upsert: true });
 
       if (storageError) {
@@ -38,7 +57,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Get public URL
-      const { data: publicData } = supabase.storage.from('gazette-pdfs').getPublicUrl(storageKey);
+      const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(storageKey);
       pdfUrl = publicData.publicUrl;
     } else {
       // ── Use provided URL ───────────────────────────────────────────────────
