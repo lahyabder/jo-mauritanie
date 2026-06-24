@@ -1,29 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
-import fs from 'fs';
-import path from 'path';
 
 // ⚠️  TEMPORARY MIGRATION ENDPOINT — DELETE AFTER USE
 // Protected by a secret key to prevent unauthorized access
 
 const MIGRATION_SECRET = process.env.MIGRATION_SECRET ?? 'migrate-jo-2026';
 
-// Build DB URL from Supabase URL if DATABASE_URL not explicitly set
-function getDbUrl(): string | null {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+// Known Supabase pooler regions
+const REGIONS = [
+  'eu-west-3', 'eu-west-1', 'eu-west-2', 'eu-central-1', 'eu-north-1',
+  'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+  'ap-southeast-1', 'ap-northeast-1', 'ap-south-1',
+  'ca-central-1', 'sa-east-1',
+];
+
+async function tryConnect(url: string): Promise<boolean> {
+  const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 6000 });
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    await pool.end();
+    return true;
+  } catch {
+    await pool.end().catch(() => {});
+    return false;
+  }
+}
+
+async function findWorkingDbUrl(ref: string, pw: string): Promise<string | null> {
+  const encodedPw = encodeURIComponent(pw);
   
-  // Derive from Supabase project URL
-  // e.g. https://xtwcuuyygocwlkdesvmq.supabase.co → project ref
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-  const match = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/);
-  if (!match) return null;
+  // Try direct DB host first (no pooler)
+  const directUrl = `postgresql://postgres:${encodedPw}@db.${ref}.supabase.co:5432/postgres`;
+  if (await tryConnect(directUrl)) { console.log('direct'); return directUrl; }
   
-  const ref = match[1];
-  const pw = process.env.SUPABASE_DB_PASSWORD;
-  if (!pw) return null;
-  
-  // Use session pooler (port 5432) — works from Vercel edge regions
-  return `postgresql://postgres.${ref}:${pw}@aws-0-eu-west-3.pooler.supabase.com:5432/postgres`;
+  for (const region of REGIONS) {
+    const base = `aws-0-${region}.pooler.supabase.com`;
+    // Transaction pooler (port 6543) — no prepared statements
+    const url6543 = `postgresql://postgres.${ref}:${encodedPw}@${base}:6543/postgres`;
+    if (await tryConnect(url6543)) { console.log(`Found: ${region}:6543`); return url6543; }
+    // Session pooler (port 5432)
+    const url5432 = `postgresql://postgres.${ref}:${encodedPw}@${base}:5432/postgres`;
+    if (await tryConnect(url5432)) { console.log(`Found: ${region}:5432`); return url5432; }
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -33,9 +54,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const dbUrl = getDbUrl();
+  const body = await req.json().catch(() => ({}));
+  const sql = body.sql as string | undefined;
+  const testOnly = body.test_only as boolean | undefined;
+
+  // Build connection URL
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  const match = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/);
+  const ref = match?.[1];
+  const pw = process.env.SUPABASE_DB_PASSWORD;
+
+  if (!ref || !pw) {
+    return NextResponse.json({ error: 'Missing SUPABASE env vars', ref, hasPw: !!pw }, { status: 500 });
+  }
+
+  // Find working region
+  const dbUrl = await findWorkingDbUrl(ref, pw);
   if (!dbUrl) {
-    return NextResponse.json({ error: 'DATABASE_URL not set' }, { status: 500 });
+    return NextResponse.json({ error: 'Cannot connect to DB — no region reachable or wrong password' }, { status: 500 });
+  }
+
+  if (testOnly) {
+    return NextResponse.json({ success: true, message: 'DB connection OK', dbUrl: dbUrl.replace(pw, '****') });
+  }
+
+  if (!sql) {
+    return NextResponse.json({ error: 'Provide sql in body' }, { status: 400 });
   }
 
   const pool = new Pool({
@@ -46,33 +90,21 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = await pool.connect();
-
-    // Read the migration SQL (passed in body or from filesystem)
-    const body = await req.json().catch(() => ({}));
-    let sql = body.sql as string | undefined;
-
-    if (!sql) {
-      return NextResponse.json({ error: 'Provide sql in body' }, { status: 400 });
-    }
-
-    const results: string[] = [];
     const errors: string[] = [];
 
-    // Split SQL into individual statements
+    // Split SQL into individual statements — split on semicolon at end of line
     const statements = sql
-      .split(/;\s*\n/)
+      .split(/;\s*(?:\r?\n|$)/)
       .map((s: string) => s.trim())
-      .filter((s: string) => s.length > 2 && !s.startsWith('--'));
+      .filter((s: string) => s.length > 3 && !s.startsWith('--'));
 
     let executed = 0;
     for (const stmt of statements) {
       try {
-        await client.query(stmt + ';');
+        await client.query(stmt);
         executed++;
       } catch (err: any) {
-        // Log but continue — many statements may fail if already exists
-        const msg = `SKIP [${stmt.substring(0, 60).replace(/\n/g, ' ')}...]: ${err.message}`;
-        errors.push(msg);
+        errors.push(`[${stmt.substring(0, 50).replace(/\n/g, ' ')}]: ${err.message}`);
       }
     }
 
@@ -84,7 +116,7 @@ export async function POST(req: NextRequest) {
       total_statements: statements.length,
       executed,
       skipped: errors.length,
-      errors: errors.slice(0, 20), // First 20 errors only
+      errors: errors.slice(0, 30),
     });
   } catch (err: any) {
     await pool.end().catch(() => {});
