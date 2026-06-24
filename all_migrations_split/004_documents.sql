@@ -199,3 +199,5 @@ CREATE TABLE IF NOT EXISTS public.articles (
 CREATE INDEX IF NOT EXISTS idx_articles_document ON public.articles(document_id);
 CREATE INDEX IF NOT EXISTS idx_articles_number   ON public.articles(article_number);
 
+
+

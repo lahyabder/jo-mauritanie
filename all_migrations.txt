@@ -1,0 +1,2853 @@
+DROP VIEW IF EXISTS public.document_entities CASCADE;
+DROP VIEW IF EXISTS public.entities CASCADE;
+DROP VIEW IF EXISTS public.timeline_events CASCADE;
+DROP VIEW IF EXISTS public.v_latest_issues CASCADE;
+DROP VIEW IF EXISTS public.v_documents_with_institution CASCADE;
+DROP VIEW IF EXISTS public.v_recent_appointments CASCADE;
+DROP TABLE IF EXISTS public.documents CASCADE;
+DROP TABLE IF EXISTS public.sync_logs CASCADE;
+DROP TABLE IF EXISTS public.kg_nodes CASCADE;
+DROP TABLE IF EXISTS public.kg_edges CASCADE;
+
+-- =========================================================
+-- FILE: 001_extensions_and_types.sql
+-- =========================================================
+-- ============================================================
+-- Migration 001: Extensions & Custom Types
+-- Observatoire Intelligent du Journal Officiel Mauritanien
+-- ============================================================
+
+-- ------------------------------------
+-- Enable required PostgreSQL extensions
+-- ------------------------------------
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";         -- UUID generation
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";           -- Trigram fuzzy search
+CREATE EXTENSION IF NOT EXISTS "unaccent";          -- Accent-insensitive search
+CREATE EXTENSION IF NOT EXISTS "btree_gin";         -- GIN indexes on btree types
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements"; -- Query performance tracking
+
+-- ------------------------------------
+-- Document type enum
+-- ------------------------------------
+CREATE TYPE document_type AS ENUM (
+  'law',
+  'decree',
+  'decision',
+  'regulation',
+  'circular',
+  'announcement',
+  'notification',
+  'appointment',
+  'other'
+);
+
+-- ------------------------------------
+-- Document status lifecycle
+-- ------------------------------------
+CREATE TYPE document_status AS ENUM (
+  'draft',          -- Not yet published
+  'published',      -- Active and in force
+  'amended',        -- Modified by another document
+  'repealed',       -- Fully revoked
+  'suspended',      -- Temporarily suspended
+  'archived'        -- Historical, no longer active
+);
+
+-- ------------------------------------
+-- Language codes (BCP-47 style)
+-- ------------------------------------
+CREATE TYPE language_code AS ENUM (
+  'ar',   -- Arabic
+  'fr',   -- French
+  'en'    -- English (future)
+);
+
+-- ------------------------------------
+-- Relationship types between documents
+-- ------------------------------------
+CREATE TYPE relation_type AS ENUM (
+  'amends',         -- Document A amends Document B
+  'repeals',        -- Document A repeals Document B
+  'implements',     -- Document A implements Document B
+  'supplements',    -- Document A supplements Document B
+  'references',     -- Document A references Document B
+  'supersedes',     -- Document A supersedes Document B
+  'consolidates',   -- Document A consolidates Document B
+  'suspends'        -- Document A suspends Document B
+);
+
+-- ------------------------------------
+-- Institution category
+-- ------------------------------------
+CREATE TYPE institution_category AS ENUM (
+  'ministry',
+  'presidency',
+  'parliament',
+  'constitutional_council',
+  'supreme_court',
+  'public_agency',
+  'regional_authority',
+  'municipality',
+  'public_enterprise',
+  'other'
+);
+
+-- ------------------------------------
+-- Person role
+-- ------------------------------------
+CREATE TYPE person_role AS ENUM (
+  'president',
+  'prime_minister',
+  'minister',
+  'secretary_general',
+  'director',
+  'judge',
+  'official',
+  'ambassador',
+  'governor',
+  'other'
+);
+
+-- ------------------------------------
+-- Appointment type
+-- ------------------------------------
+CREATE TYPE appointment_type AS ENUM (
+  'nomination',
+  'promotion',
+  'transfer',
+  'dismissal',
+  'retirement',
+  'delegation',
+  'other'
+);
+
+-- ------------------------------------
+-- Statistics period granularity
+-- ------------------------------------
+CREATE TYPE stats_period AS ENUM (
+  'daily',
+  'weekly',
+  'monthly',
+  'quarterly',
+  'yearly'
+);
+
+-- ------------------------------------
+-- TABLE: legal_sources (e.g. Official Gazette)
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_sources (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code                TEXT UNIQUE NOT NULL,
+    name_ar             TEXT NOT NULL,
+    name_fr             TEXT,
+    is_active           BOOLEAN DEFAULT TRUE,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+INSERT INTO public.legal_sources (code, name_ar, name_fr)
+VALUES ('official_gazette', 'الجريدة الرسمية', 'Journal Officiel')
+ON CONFLICT (code) DO NOTHING;
+
+
+
+-- =========================================================
+-- FILE: 002_institutions_and_persons.sql
+-- =========================================================
+-- ============================================================
+-- Migration 002: Core Tables — Institutions & Persons
+-- ============================================================
+
+-- ------------------------------------
+-- INSTITUTIONS
+-- ------------------------------------
+CREATE TABLE institutions (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- Identity
+  code                VARCHAR(50) UNIQUE,                         -- e.g. "MIN-INT", "MJ"
+  category            institution_category NOT NULL DEFAULT 'other',
+  
+  -- Multilingual names
+  name_ar             TEXT NOT NULL,
+  name_fr             TEXT,
+  name_en             TEXT,
+  
+  -- Multilingual short names / acronyms
+  short_name_ar       TEXT,
+  short_name_fr       TEXT,
+  short_name_en       TEXT,
+  
+  -- Multilingual descriptions
+  description_ar      TEXT,
+  description_fr      TEXT,
+  description_en      TEXT,
+  
+  -- Hierarchy
+  parent_id           UUID REFERENCES institutions(id) ON DELETE SET NULL,
+  level               SMALLINT DEFAULT 1 CHECK (level BETWEEN 1 AND 10),
+  
+  -- Contact & metadata
+  website_url         TEXT,
+  logo_url            TEXT,
+  founded_date        DATE,
+  dissolved_date      DATE,
+  is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+  
+  -- Audit
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  -- Search vector (multilingual)
+  search_vector       TSVECTOR GENERATED ALWAYS AS (
+    setweight(to_tsvector('arabic', COALESCE(name_ar, '')), 'A') ||
+    setweight(to_tsvector('french', COALESCE(name_fr, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(short_name_ar, '') || ' ' || COALESCE(short_name_fr, '')), 'B') ||
+    setweight(to_tsvector('simple', COALESCE(code, '')), 'C')
+  ) STORED
+);
+
+-- Indexes
+CREATE INDEX idx_institutions_parent      ON institutions(parent_id);
+CREATE INDEX idx_institutions_category    ON institutions(category);
+CREATE INDEX idx_institutions_active      ON institutions(is_active);
+CREATE INDEX idx_institutions_search      ON institutions USING GIN(search_vector);
+CREATE INDEX idx_institutions_name_ar_trgm ON institutions USING GIN(name_ar gin_trgm_ops);
+CREATE INDEX idx_institutions_name_fr_trgm ON institutions USING GIN(name_fr gin_trgm_ops);
+
+
+-- ------------------------------------
+-- PERSONS
+-- ------------------------------------
+CREATE TABLE persons (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- Identity
+  national_id         VARCHAR(20) UNIQUE,                         -- National ID number if known
+  
+  -- Multilingual names
+  full_name_ar        TEXT NOT NULL,
+  full_name_fr        TEXT,
+  full_name_en        TEXT,
+  
+  first_name_ar       TEXT,
+  last_name_ar        TEXT,
+  first_name_fr       TEXT,
+  last_name_fr        TEXT,
+  
+  -- Role & affiliation
+  current_role        person_role DEFAULT 'other',
+  current_role_title_ar TEXT,
+  current_role_title_fr TEXT,
+  current_institution_id UUID REFERENCES institutions(id) ON DELETE SET NULL,
+  
+  -- Biographical
+  birth_date          DATE,
+  birth_place_ar      TEXT,
+  birth_place_fr      TEXT,
+  nationality         VARCHAR(50) DEFAULT 'MR',                   -- ISO 3166-1 alpha-2
+  gender              CHAR(1) CHECK (gender IN ('M', 'F')),
+  
+  -- Contact
+  photo_url           TEXT,
+  biography_ar        TEXT,
+  biography_fr        TEXT,
+  
+  -- Audit
+  is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  -- Search vector
+  search_vector       TSVECTOR GENERATED ALWAYS AS (
+    setweight(to_tsvector('arabic', COALESCE(full_name_ar, '')), 'A') ||
+    setweight(to_tsvector('french', COALESCE(full_name_fr, '')), 'A') ||
+    setweight(to_tsvector('arabic', COALESCE(biography_ar, '')), 'C')
+  ) STORED
+);
+
+-- Indexes
+CREATE INDEX idx_persons_institution      ON persons(current_institution_id);
+CREATE INDEX idx_persons_role             ON persons(current_role);
+CREATE INDEX idx_persons_active           ON persons(is_active);
+CREATE INDEX idx_persons_search           ON persons USING GIN(search_vector);
+CREATE INDEX idx_persons_name_ar_trgm     ON persons USING GIN(full_name_ar gin_trgm_ops);
+CREATE INDEX idx_persons_name_fr_trgm     ON persons USING GIN(full_name_fr gin_trgm_ops);
+
+
+-- ------------------------------------
+-- PERSON ALIASES (alternative names, maiden names, transliterations)
+-- ------------------------------------
+CREATE TABLE aliases (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- What is being aliased (person OR institution, exclusive)
+  person_id       UUID REFERENCES persons(id) ON DELETE CASCADE,
+  institution_id  UUID REFERENCES institutions(id) ON DELETE CASCADE,
+  
+  -- Alias info
+  alias_text      TEXT NOT NULL,
+  language        language_code NOT NULL DEFAULT 'ar',
+  alias_type      VARCHAR(50),                                     -- e.g. 'maiden_name', 'transliteration', 'abbreviation'
+  is_preferred    BOOLEAN DEFAULT FALSE,
+  
+  -- Audit
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- Exactly one of person_id or institution_id must be set
+  CONSTRAINT aliases_exclusive_target CHECK (
+    (person_id IS NOT NULL AND institution_id IS NULL) OR
+    (person_id IS NULL AND institution_id IS NOT NULL)
+  )
+);
+
+CREATE INDEX idx_aliases_person      ON aliases(person_id);
+CREATE INDEX idx_aliases_institution ON aliases(institution_id);
+CREATE INDEX idx_aliases_text_trgm   ON aliases USING GIN(alias_text gin_trgm_ops);
+
+
+-- ------------------------------------
+-- Auto-update updated_at trigger function
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION trigger_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_updated_at_institutions
+  BEFORE UPDATE ON institutions
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_updated_at_persons
+  BEFORE UPDATE ON persons
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+
+-- =========================================================
+-- FILE: 003_issues.sql
+-- =========================================================
+-- ============================================================
+-- Migration 003: Issues (Official Gazette Numbers)
+-- ============================================================
+
+CREATE TABLE issues (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_id           UUID REFERENCES public.legal_sources(id) ON DELETE SET NULL,
+  
+  -- Official identification
+  issue_number        INTEGER NOT NULL UNIQUE,                    -- Official JO number (e.g. 1456)
+  issue_number_display VARCHAR(20),                              -- Formatted display e.g. "1456 bis"
+  
+  -- Dates
+  publication_date    DATE NOT NULL,
+  reception_date      DATE,                                      -- Date received by observatory
+  
+  -- Multilingual titles / edition
+  title_ar            TEXT,
+  title_fr            TEXT,
+  title_en            TEXT,
+  edition_note_ar     TEXT,                                      -- e.g. "Special edition"
+  edition_note_fr     TEXT,
+  edition_note_en     TEXT,
+  
+  -- File storage (Supabase Storage bucket paths)
+  pdf_url             TEXT,                                      -- Full PDF of the gazette issue
+  pdf_storage_path    TEXT,                                      -- Internal storage path
+  pdf_page_count      INTEGER,
+  pdf_file_size_bytes BIGINT,
+  pdf_checksum        TEXT,                                      -- SHA-256 for integrity
+  
+  -- Permanent URL (canonical)
+  permanent_url       TEXT GENERATED ALWAYS AS (
+    '/jo/issues/' || issue_number::TEXT
+  ) STORED,
+  
+  -- Status
+  is_published        BOOLEAN NOT NULL DEFAULT FALSE,
+  is_special_edition  BOOLEAN NOT NULL DEFAULT FALSE,
+  
+  -- Summary counts (denormalized for performance)
+  document_count      INTEGER DEFAULT 0,
+  law_count           INTEGER DEFAULT 0,
+  decree_count        INTEGER DEFAULT 0,
+  
+  -- Source metadata
+  source_url          TEXT,                                      -- Original government URL
+  scraped_at          TIMESTAMPTZ,
+  
+  -- Audit
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  -- Constraints
+  CONSTRAINT issues_number_positive CHECK (issue_number > 0)
+);
+
+-- Indexes
+CREATE INDEX idx_issues_publication_date  ON issues(publication_date DESC);
+CREATE INDEX idx_issues_published         ON issues(is_published);
+CREATE INDEX idx_issues_special           ON issues(is_special_edition);
+CREATE INDEX idx_issues_year              ON issues(EXTRACT(YEAR FROM publication_date));
+
+-- Trigger
+CREATE TRIGGER set_updated_at_issues
+  BEFORE UPDATE ON issues
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Comments
+COMMENT ON TABLE  issues IS 'Official Gazette (Journal Officiel) issue records — one row per published issue number.';
+COMMENT ON COLUMN issues.issue_number IS 'The official sequential number of the gazette issue, unique and always positive.';
+COMMENT ON COLUMN issues.permanent_url IS 'Canonical URL for this issue, auto-generated from issue_number.';
+
+
+-- =========================================================
+-- FILE: 004_documents.sql
+-- =========================================================
+-- ============================================================
+-- Migration 004: Documents (Universal Base Table)
+-- All document types share this table via type discriminator.
+-- Type-specific tables extend it with additional columns.
+-- ============================================================
+
+CREATE TABLE documents (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_id             UUID REFERENCES public.legal_sources(id) ON DELETE SET NULL,
+  
+  -- -------------------------------------------------------
+  -- Required fields (every document must have these)
+  -- -------------------------------------------------------
+  
+  -- Official identification
+  official_number       TEXT,                                     -- e.g. "Loi N° 2024-001"
+  issue_id              UUID NOT NULL REFERENCES issues(id) ON DELETE RESTRICT,
+  type                  document_type NOT NULL,
+  
+  -- Classification
+  category_ar           TEXT,                                     -- Thematic category (Arabic)
+  category_fr           TEXT,                                     -- Thematic category (French)
+  category_en           TEXT,
+  
+  -- Issuing institution
+  institution_id        UUID REFERENCES institutions(id) ON DELETE SET NULL,
+  
+  -- Dates
+  document_date         DATE NOT NULL,                            -- Date on the document itself
+  effective_date        DATE,                                     -- Date it enters into force
+  expiry_date           DATE,                                     -- Date it expires (if applicable)
+  signature_date        DATE,
+  
+  -- Language of original
+  original_language     language_code NOT NULL DEFAULT 'ar',
+  
+  -- Multilingual titles
+  title_ar              TEXT,
+  title_fr              TEXT,
+  title_en              TEXT,
+  
+  -- Multilingual original text (full)
+  content_ar            TEXT,
+  content_fr            TEXT,
+  content_en            TEXT,
+  
+  -- Summaries
+  summary_ar            TEXT,                                     -- Human-written summary (Arabic)
+  summary_fr            TEXT,                                     -- Human-written summary (French)
+  summary_en            TEXT,
+  
+  -- AI-generated content
+  ai_summary_ar         TEXT,
+  ai_summary_fr         TEXT,
+  ai_summary_en         TEXT,
+  ai_keywords           TEXT[],                                   -- AI-extracted keyword array
+  ai_entities           JSONB,                                    -- AI-extracted named entities
+  ai_processed_at       TIMESTAMPTZ,
+  
+  -- Manual keywords / tags
+  keywords              TEXT[],
+  tags                  TEXT[],
+  
+  -- PDF location within gazette issue
+  pdf_page_start        INTEGER,                                  -- First page in the issue PDF
+  pdf_page_end          INTEGER,                                  -- Last page in the issue PDF
+  pdf_url               TEXT,                                     -- Direct link to document PDF (extracted)
+  pdf_storage_path      TEXT,                                     -- Supabase Storage path
+  
+  -- Permanent canonical URL (immutable after publish)
+  permanent_url         TEXT UNIQUE,                              -- e.g. /documents/laws/2024-001
+  
+  -- Status & versioning
+  status                document_status NOT NULL DEFAULT 'draft',
+  version               INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+  is_current_version    BOOLEAN NOT NULL DEFAULT TRUE,
+  parent_id             UUID REFERENCES documents(id) ON DELETE SET NULL, -- For versioning chain
+  
+  -- Metadata
+  page_count            INTEGER,
+  word_count_ar         INTEGER,
+  word_count_fr         INTEGER,
+  is_confidential       BOOLEAN NOT NULL DEFAULT FALSE,
+  requires_gazette_ref  BOOLEAN NOT NULL DEFAULT TRUE,
+  
+  -- Source metadata
+  source_url            TEXT,
+  scraped_at            TIMESTAMPTZ,
+  raw_metadata          JSONB,                                    -- Any extra structured metadata from parsing
+  
+  -- Audit
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  published_at          TIMESTAMPTZ,
+  created_by            UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_by            UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  -- Full-text search vector (combined multilingual, weighted)
+  search_vector         TSVECTOR GENERATED ALWAYS AS (
+    setweight(to_tsvector('arabic',  COALESCE(title_ar, '')), 'A')      ||
+    setweight(to_tsvector('french',  COALESCE(title_fr, '')), 'A')      ||
+    setweight(to_tsvector('arabic',  COALESCE(official_number, '')), 'B') ||
+    setweight(to_tsvector('arabic',  COALESCE(summary_ar, '')), 'B')    ||
+    setweight(to_tsvector('french',  COALESCE(summary_fr, '')), 'B')    ||
+    setweight(to_tsvector('arabic',  COALESCE(content_ar, '')), 'C')    ||
+    setweight(to_tsvector('french',  COALESCE(content_fr, '')), 'C')    ||
+    setweight(to_tsvector('simple',  COALESCE(array_to_string(keywords, ' '), '')), 'B')
+  ) STORED,
+  
+  -- Constraints
+  CONSTRAINT documents_pdf_pages_order CHECK (
+    pdf_page_start IS NULL OR pdf_page_end IS NULL OR pdf_page_end >= pdf_page_start
+  ),
+  CONSTRAINT documents_effective_after_document CHECK (
+    effective_date IS NULL OR effective_date >= document_date - INTERVAL '1 year'
+  )
+);
+
+-- ------------------------------------
+-- Indexes — Critical for millions of records
+-- ------------------------------------
+
+-- Primary lookup patterns
+CREATE INDEX idx_documents_issue_id         ON documents(issue_id);
+CREATE INDEX idx_documents_type             ON documents(type);
+CREATE INDEX idx_documents_status           ON documents(status);
+CREATE INDEX idx_documents_institution_id   ON documents(institution_id);
+CREATE INDEX idx_documents_document_date    ON documents(document_date DESC);
+CREATE INDEX idx_documents_effective_date   ON documents(effective_date DESC);
+CREATE INDEX idx_documents_is_current       ON documents(is_current_version);
+CREATE INDEX idx_documents_parent_id        ON documents(parent_id);
+
+-- Compound indexes for common queries
+CREATE INDEX idx_documents_type_status      ON documents(type, status);
+CREATE INDEX idx_documents_type_date        ON documents(type, document_date DESC);
+CREATE INDEX idx_documents_issue_type       ON documents(issue_id, type);
+CREATE INDEX idx_documents_status_current   ON documents(status, is_current_version);
+
+-- Full-text search (GIN — essential for millions of records)
+CREATE INDEX idx_documents_search_vector    ON documents USING GIN(search_vector);
+
+-- Trigram search (for partial match / autocomplete)
+CREATE INDEX idx_documents_title_ar_trgm    ON documents USING GIN(title_ar gin_trgm_ops);
+CREATE INDEX idx_documents_title_fr_trgm    ON documents USING GIN(title_fr gin_trgm_ops);
+CREATE INDEX idx_documents_official_number  ON documents USING GIN(official_number gin_trgm_ops);
+
+-- Array / JSONB indexes
+CREATE INDEX idx_documents_keywords         ON documents USING GIN(keywords);
+CREATE INDEX idx_documents_ai_keywords      ON documents USING GIN(ai_keywords);
+CREATE INDEX idx_documents_ai_entities      ON documents USING GIN(ai_entities);
+CREATE INDEX idx_documents_tags             ON documents USING GIN(tags);
+
+-- Partial index: only current, published documents (most common read path)
+CREATE INDEX idx_documents_published_current ON documents(document_date DESC)
+  WHERE status = 'published' AND is_current_version = TRUE;
+
+-- Year-based partitioning helper index
+CREATE INDEX idx_documents_year             ON documents(EXTRACT(YEAR FROM document_date)::INTEGER);
+
+-- Trigger
+CREATE TRIGGER set_updated_at_documents
+  BEFORE UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Auto-set published_at when status becomes 'published'
+CREATE OR REPLACE FUNCTION trigger_set_published_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'published' AND OLD.status <> 'published' THEN
+    NEW.published_at = NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_published_at_documents
+  BEFORE UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_published_at();
+
+-- Comments
+COMMENT ON TABLE  documents IS 'Universal document table. All gazette document types (laws, decrees, decisions, etc.) share this table. Type-specific metadata lives in dedicated extension tables.';
+COMMENT ON COLUMN documents.official_number IS 'The official number as it appears in the gazette, e.g. "Loi N° 2024-001 du 15 janvier 2024".';
+COMMENT ON COLUMN documents.version IS 'Starts at 1. Incremented when an amendment creates a new version.';
+COMMENT ON COLUMN documents.is_current_version IS 'True only for the latest version of a document. Old versions have this set to FALSE.';
+COMMENT ON COLUMN documents.parent_id IS 'Points to previous version of the same document, forming a version chain.';
+COMMENT ON COLUMN documents.permanent_url IS 'Canonical immutable URL. Set on first publish and never changed.';
+COMMENT ON COLUMN documents.pdf_page_start IS 'Page number within the full gazette issue PDF where this document begins (1-indexed).';
+COMMENT ON COLUMN documents.search_vector IS 'Auto-maintained GIN-indexed tsvector for multilingual full-text search across Arabic and French.';
+
+-- ------------------------------------
+-- TABLE: articles
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.articles (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id         UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+  article_number      TEXT NOT NULL,
+  article_title       TEXT,
+  order_index         INTEGER DEFAULT 0,
+  page_number         INTEGER,
+  original_text       TEXT,
+  ai_summary          TEXT,
+  keywords            TEXT[],
+  status              TEXT DEFAULT 'active',
+  created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_articles_document ON public.articles(document_id);
+CREATE INDEX IF NOT EXISTS idx_articles_number   ON public.articles(article_number);
+
+
+
+-- =========================================================
+-- FILE: 005_type_specific_tables.sql
+-- =========================================================
+-- ============================================================
+-- Migration 005: Type-Specific Extension Tables
+-- Each extends `documents` with domain-specific columns.
+-- These are 1:1 with documents (same UUID as PK).
+-- ============================================================
+
+-- ------------------------------------
+-- LAWS (Lois)
+-- ------------------------------------
+CREATE TABLE laws (
+  document_id         UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  -- Law-specific identification
+  law_number          TEXT,                                       -- e.g. "2024-001"
+  law_year            SMALLINT GENERATED ALWAYS AS (
+    EXTRACT(YEAR FROM (SELECT document_date FROM documents d WHERE d.id = document_id))::SMALLINT
+  ) STORED,
+  
+  -- Classification
+  law_domain_ar       TEXT,                                       -- e.g. "قانون مالي"
+  law_domain_fr       TEXT,                                       -- e.g. "Droit financier"
+  law_domain_en       TEXT,
+  
+  -- Constitutional reference
+  constitutional_basis_ar TEXT,
+  constitutional_basis_fr TEXT,
+  
+  -- Parliament info
+  parliament_session  TEXT,
+  vote_date           DATE,
+  vote_result         TEXT,                                       -- "adopted", "rejected", etc.
+  promulgation_date   DATE,
+  
+  -- Scope
+  is_organic_law      BOOLEAN DEFAULT FALSE,                      -- Loi organique
+  is_finance_law      BOOLEAN DEFAULT FALSE,                      -- Loi de finances
+  articles_count      INTEGER,
+  
+  -- Amendments
+  last_amendment_date DATE,
+  amendment_count     INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_laws_year         ON laws(law_year DESC);
+CREATE INDEX idx_laws_domain_ar    ON laws USING GIN(law_domain_ar gin_trgm_ops);
+CREATE INDEX idx_laws_organic      ON laws(is_organic_law);
+CREATE INDEX idx_laws_finance      ON laws(is_finance_law);
+
+
+-- ------------------------------------
+-- DECREES (Décrets)
+-- ------------------------------------
+CREATE TABLE decrees (
+  document_id           UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  -- Decree-specific
+  decree_number         TEXT,                                     -- e.g. "2024-123"
+  decree_year           SMALLINT,
+  decree_type_ar        TEXT,                                     -- "مرسوم رئاسي" / "مرسوم وزاري"
+  decree_type_fr        TEXT,                                     -- "Décret présidentiel" / "Décret ministériel"
+  
+  -- Signatory
+  signed_by_person_id   UUID REFERENCES persons(id) ON DELETE SET NULL,
+  signed_by_title_ar    TEXT,
+  signed_by_title_fr    TEXT,
+  countersigned_by      TEXT[],                                   -- Array of countersigning ministers
+  
+  -- Content specifics
+  articles_count        INTEGER,
+  is_regulatory         BOOLEAN DEFAULT FALSE,
+  is_executive          BOOLEAN DEFAULT FALSE,
+  
+  -- Implementation
+  implements_law_id     UUID REFERENCES documents(id) ON DELETE SET NULL,
+  implementation_deadline DATE
+);
+
+CREATE INDEX idx_decrees_year          ON decrees(decree_year DESC);
+CREATE INDEX idx_decrees_signed_by     ON decrees(signed_by_person_id);
+CREATE INDEX idx_decrees_implements    ON decrees(implements_law_id);
+
+
+-- ------------------------------------
+-- DECISIONS (Décisions)
+-- ------------------------------------
+CREATE TABLE decisions (
+  document_id           UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  decision_number       TEXT,
+  decision_year         SMALLINT,
+  decision_type_ar      TEXT,
+  decision_type_fr      TEXT,
+  
+  -- Issuing authority
+  issuing_authority_ar  TEXT,
+  issuing_authority_fr  TEXT,
+  signed_by_person_id   UUID REFERENCES persons(id) ON DELETE SET NULL,
+  
+  -- Scope
+  is_individual         BOOLEAN DEFAULT FALSE,                    -- Individual vs. general decision
+  beneficiary_name_ar   TEXT,
+  beneficiary_name_fr   TEXT,
+  beneficiary_person_id UUID REFERENCES persons(id) ON DELETE SET NULL,
+  subject_ar            TEXT,
+  subject_fr            TEXT
+);
+
+CREATE INDEX idx_decisions_year        ON decisions(decision_year DESC);
+CREATE INDEX idx_decisions_signed_by   ON decisions(signed_by_person_id);
+CREATE INDEX idx_decisions_beneficiary ON decisions(beneficiary_person_id);
+
+
+-- ------------------------------------
+-- REGULATIONS (Règlements)
+-- ------------------------------------
+CREATE TABLE regulations (
+  document_id           UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  regulation_number     TEXT,
+  regulation_year       SMALLINT,
+  regulation_type_ar    TEXT,
+  regulation_type_fr    TEXT,
+  
+  -- Regulatory domain
+  domain_ar             TEXT,
+  domain_fr             TEXT,
+  scope_ar              TEXT,                                     -- Geographic/functional scope
+  scope_fr              TEXT,
+  
+  -- Technical details
+  articles_count        INTEGER,
+  annexes_count         INTEGER DEFAULT 0,
+  is_temporary          BOOLEAN DEFAULT FALSE,
+  temporary_duration_months INTEGER
+);
+
+CREATE INDEX idx_regulations_year    ON regulations(regulation_year DESC);
+CREATE INDEX idx_regulations_domain  ON regulations USING GIN(domain_ar gin_trgm_ops);
+
+
+-- ------------------------------------
+-- CIRCULARS (Circulaires)
+-- ------------------------------------
+CREATE TABLE circulars (
+  document_id           UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  circular_number       TEXT,
+  circular_year         SMALLINT,
+  
+  -- Addressees
+  addressed_to_ar       TEXT[],                                   -- Array of addresses (Arabic)
+  addressed_to_fr       TEXT[],
+  
+  -- Subject
+  subject_ar            TEXT,
+  subject_fr            TEXT,
+  
+  -- Related decree/law
+  related_law_id        UUID REFERENCES documents(id) ON DELETE SET NULL,
+  signed_by_person_id   UUID REFERENCES persons(id) ON DELETE SET NULL,
+  signed_by_title_ar    TEXT,
+  signed_by_title_fr    TEXT
+);
+
+CREATE INDEX idx_circulars_year        ON circulars(circular_year DESC);
+CREATE INDEX idx_circulars_signed_by   ON circulars(signed_by_person_id);
+CREATE INDEX idx_circulars_related_law ON circulars(related_law_id);
+
+
+-- ------------------------------------
+-- ANNOUNCEMENTS (Annonces)
+-- ------------------------------------
+CREATE TABLE announcements (
+  document_id           UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  announcement_type_ar  TEXT,
+  announcement_type_fr  TEXT,
+  
+  -- Tender / procurement specifics
+  is_tender             BOOLEAN DEFAULT FALSE,
+  tender_reference      TEXT,
+  tender_deadline       DATE,
+  tender_budget_mrm     NUMERIC(18, 2),                          -- Amount in Mauritanian Ouguiya
+  
+  -- Contact
+  contact_info_ar       TEXT,
+  contact_info_fr       TEXT,
+  contact_email         TEXT,
+  contact_phone         TEXT
+);
+
+CREATE INDEX idx_announcements_tender   ON announcements(is_tender);
+CREATE INDEX idx_announcements_deadline ON announcements(tender_deadline);
+
+
+-- ------------------------------------
+-- NOTIFICATIONS (Avis)
+-- ------------------------------------
+CREATE TABLE notifications (
+  document_id           UUID PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+  
+  notification_type_ar  TEXT,
+  notification_type_fr  TEXT,
+  
+  -- Target audience
+  audience_ar           TEXT,
+  audience_fr           TEXT,
+  
+  -- Urgency / priority
+  is_urgent             BOOLEAN DEFAULT FALSE,
+  priority_level        SMALLINT DEFAULT 3 CHECK (priority_level BETWEEN 1 AND 5),
+  
+  -- Response deadline
+  response_deadline     DATE,
+  signed_by_person_id   UUID REFERENCES persons(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_notifications_urgent ON notifications(is_urgent);
+CREATE INDEX idx_notifications_type   ON notifications USING GIN(notification_type_ar gin_trgm_ops);
+
+
+-- =========================================================
+-- FILE: 006_appointments.sql
+-- =========================================================
+-- ============================================================
+-- Migration 006: Appointments
+-- ============================================================
+
+CREATE TABLE appointments (
+  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- Link to base document (the decree/decision that contains this appointment)
+  document_id             UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  
+  -- The person being appointed
+  person_id               UUID REFERENCES persons(id) ON DELETE SET NULL,
+  
+  -- Name as it appears in the official text (may differ from persons table)
+  person_name_ar          TEXT NOT NULL,
+  person_name_fr          TEXT,
+  
+  -- Position / role
+  appointment_type        appointment_type NOT NULL DEFAULT 'nomination',
+  position_title_ar       TEXT NOT NULL,
+  position_title_fr       TEXT,
+  position_title_en       TEXT,
+  position_grade_ar       TEXT,                                   -- Civil service grade
+  position_grade_fr       TEXT,
+  
+  -- Institution
+  institution_id          UUID REFERENCES institutions(id) ON DELETE SET NULL,
+  institution_name_ar     TEXT,                                   -- As it appears in the text
+  institution_name_fr     TEXT,
+  
+  -- Department / division within institution
+  department_ar           TEXT,
+  department_fr           TEXT,
+  
+  -- Geographic scope
+  location_ar             TEXT,
+  location_fr             TEXT,
+  wilaya_ar               TEXT,                                   -- Mauritanian region (wilaya)
+  wilaya_fr               TEXT,
+  
+  -- Dates
+  appointment_date        DATE NOT NULL,
+  effective_date          DATE,
+  end_date                DATE,
+  
+  -- Previous position (for transfers)
+  previous_position_ar    TEXT,
+  previous_position_fr    TEXT,
+  previous_institution_id UUID REFERENCES institutions(id) ON DELETE SET NULL,
+  
+  -- Replacing whom
+  replacing_person_id     UUID REFERENCES persons(id) ON DELETE SET NULL,
+  replacing_name_ar       TEXT,
+  
+  -- Salary grade / index
+  salary_index            VARCHAR(20),
+  salary_grade            VARCHAR(20),
+  
+  -- Audit
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- Search vector
+  search_vector           TSVECTOR GENERATED ALWAYS AS (
+    setweight(to_tsvector('arabic', COALESCE(person_name_ar, '')), 'A')     ||
+    setweight(to_tsvector('french', COALESCE(person_name_fr, '')), 'A')     ||
+    setweight(to_tsvector('arabic', COALESCE(position_title_ar, '')), 'B')  ||
+    setweight(to_tsvector('french', COALESCE(position_title_fr, '')), 'B')  ||
+    setweight(to_tsvector('arabic', COALESCE(institution_name_ar, '')), 'B')||
+    setweight(to_tsvector('arabic', COALESCE(wilaya_ar, '')), 'C')
+  ) STORED
+);
+
+-- Indexes
+CREATE INDEX idx_appointments_document_id      ON appointments(document_id);
+CREATE INDEX idx_appointments_person_id        ON appointments(person_id);
+CREATE INDEX idx_appointments_institution_id   ON appointments(institution_id);
+CREATE INDEX idx_appointments_type             ON appointments(appointment_type);
+CREATE INDEX idx_appointments_date             ON appointments(appointment_date DESC);
+CREATE INDEX idx_appointments_effective_date   ON appointments(effective_date DESC);
+CREATE INDEX idx_appointments_replacing        ON appointments(replacing_person_id);
+CREATE INDEX idx_appointments_prev_institution ON appointments(previous_institution_id);
+CREATE INDEX idx_appointments_search           ON appointments USING GIN(search_vector);
+CREATE INDEX idx_appointments_name_ar_trgm     ON appointments USING GIN(person_name_ar gin_trgm_ops);
+CREATE INDEX idx_appointments_name_fr_trgm     ON appointments USING GIN(person_name_fr gin_trgm_ops);
+CREATE INDEX idx_appointments_title_ar_trgm    ON appointments USING GIN(position_title_ar gin_trgm_ops);
+
+-- Trigger
+CREATE TRIGGER set_updated_at_appointments
+  BEFORE UPDATE ON appointments
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+COMMENT ON TABLE appointments IS 'Individual appointments extracted from decrees and decisions. Multiple appointments can exist in a single document.';
+COMMENT ON COLUMN appointments.person_name_ar IS 'Name as written in the official text. May not match persons.full_name_ar exactly.';
+
+-- ------------------------------------
+-- TABLE: appointment_history
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.appointment_history (
+    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    person_id               UUID REFERENCES public.persons(id) ON DELETE CASCADE,
+    institution_id          UUID REFERENCES public.institutions(id) ON DELETE SET NULL,
+    instrument_document_id  UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    instrument_issue_id     UUID REFERENCES public.issues(id) ON DELETE CASCADE,
+    position_title_ar       TEXT NOT NULL,
+    position_title_fr       TEXT,
+    appointment_type        TEXT,
+    appointment_date        DATE,
+    is_current              BOOLEAN DEFAULT TRUE,
+    confidence              REAL DEFAULT 1.0,
+    created_at              TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_appointment_history_person ON public.appointment_history(person_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_history_inst   ON public.appointment_history(institution_id);
+CREATE INDEX IF NOT EXISTS idx_appointment_history_doc    ON public.appointment_history(instrument_document_id);
+
+
+
+-- =========================================================
+-- FILE: 007_relations_and_versions.sql
+-- =========================================================
+-- ============================================================
+-- Migration 007: Relations & Versioning
+-- ============================================================
+
+-- ------------------------------------
+-- DOCUMENT RELATIONS (LawRelations + DocumentRelations unified)
+-- Directed graph: source_id → target_id with a typed relation
+-- ------------------------------------
+CREATE TABLE document_relations (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- Directed edge
+  source_id       UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  target_id       UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  relation_type   relation_type NOT NULL,
+  
+  -- Description of the relation
+  description_ar  TEXT,
+  description_fr  TEXT,
+  
+  -- Which article(s) of source creates this relation
+  source_articles TEXT[],                                         -- e.g. {"Article 3", "Article 7"}
+  target_articles TEXT[],
+  
+  -- Confidence (for AI-inferred relations)
+  is_ai_inferred  BOOLEAN NOT NULL DEFAULT FALSE,
+  confidence      NUMERIC(4, 3) CHECK (confidence BETWEEN 0 AND 1),
+  
+  -- Audit
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  -- Prevent duplicate identical relations
+  CONSTRAINT document_relations_unique UNIQUE (source_id, target_id, relation_type),
+  -- Prevent self-relations
+  CONSTRAINT document_relations_no_self CHECK (source_id <> target_id)
+);
+
+CREATE INDEX idx_doc_relations_source       ON document_relations(source_id);
+CREATE INDEX idx_doc_relations_target       ON document_relations(target_id);
+CREATE INDEX idx_doc_relations_type         ON document_relations(relation_type);
+CREATE INDEX idx_doc_relations_ai_inferred  ON document_relations(is_ai_inferred);
+
+-- Convenience view: all amendments to a law
+CREATE VIEW law_amendments AS
+  SELECT
+    dr.target_id  AS law_id,
+    dr.source_id  AS amending_document_id,
+    d.official_number,
+    d.document_date,
+    d.type
+  FROM document_relations dr
+  JOIN documents d ON d.id = dr.source_id
+  WHERE dr.relation_type = 'amends';
+
+-- ------------------------------------
+-- LAW RELATIONS (specialized for law↔law hierarchy)
+-- Cross-reference between laws: parent laws, implementing decrees, etc.
+-- ------------------------------------
+CREATE TABLE law_relations (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  law_id          UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  related_law_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  relation_type   relation_type NOT NULL,
+  
+  -- Which articles are relevant
+  law_articles    TEXT[],
+  related_articles TEXT[],
+  
+  notes_ar        TEXT,
+  notes_fr        TEXT,
+  
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  CONSTRAINT law_relations_unique UNIQUE (law_id, related_law_id, relation_type),
+  CONSTRAINT law_relations_no_self CHECK (law_id <> related_law_id)
+);
+
+CREATE INDEX idx_law_relations_law_id         ON law_relations(law_id);
+CREATE INDEX idx_law_relations_related_law_id ON law_relations(related_law_id);
+CREATE INDEX idx_law_relations_type           ON law_relations(relation_type);
+
+
+-- ------------------------------------
+-- DOCUMENT VERSIONS (full history)
+-- Snapshot of key fields at each version change
+-- ------------------------------------
+CREATE TABLE document_versions (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  document_id     UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  version         INTEGER NOT NULL,
+  
+  -- What changed in this version
+  change_type     VARCHAR(50) NOT NULL,                           -- 'amendment', 'correction', 'translation_update', 'status_change'
+  change_summary_ar TEXT,
+  change_summary_fr TEXT,
+  
+  -- Snapshot of content at this version (JSON for compactness)
+  snapshot        JSONB NOT NULL,                                 -- {title_ar, title_fr, content_ar, content_fr, status, official_number, ...}
+  
+  -- The document that triggered this version (if amendment)
+  triggered_by_document_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+  
+  -- Diff (for text changes)
+  diff_ar         TEXT,                                           -- Unified diff of content_ar
+  diff_fr         TEXT,
+  
+  -- Audit
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  
+  CONSTRAINT doc_versions_version_positive CHECK (version >= 1),
+  CONSTRAINT doc_versions_unique_version UNIQUE (document_id, version)
+);
+
+CREATE INDEX idx_doc_versions_document_id     ON document_versions(document_id);
+CREATE INDEX idx_doc_versions_version         ON document_versions(document_id, version DESC);
+CREATE INDEX idx_doc_versions_triggered_by    ON document_versions(triggered_by_document_id);
+
+COMMENT ON TABLE document_versions IS 'Full audit trail of document content changes. The snapshot JSONB column stores the complete state at each version point.';
+
+
+-- ------------------------------------
+-- DOCUMENT ↔ PERSONS (many-to-many)
+-- ------------------------------------
+CREATE TABLE document_persons (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id     UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  person_id       UUID NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+  
+  -- Role this person plays in the document
+  role_ar         TEXT,                                           -- e.g. "موقّع", "مستفيد"
+  role_fr         TEXT,                                           -- e.g. "Signataire", "Bénéficiaire"
+  role_type       VARCHAR(50),                                    -- 'signatory', 'beneficiary', 'mentioned', 'appointed'
+  
+  -- Page where they are mentioned
+  mentioned_on_page INTEGER,
+  
+  -- Confidence (for AI-extracted persons)
+  is_ai_extracted   BOOLEAN DEFAULT FALSE,
+  confidence        NUMERIC(4, 3),
+  
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  CONSTRAINT doc_persons_unique UNIQUE (document_id, person_id, role_type)
+);
+
+CREATE INDEX idx_doc_persons_document  ON document_persons(document_id);
+CREATE INDEX idx_doc_persons_person    ON document_persons(person_id);
+CREATE INDEX idx_doc_persons_role_type ON document_persons(role_type);
+
+
+-- ------------------------------------
+-- DOCUMENT ↔ INSTITUTIONS (many-to-many)
+-- ------------------------------------
+CREATE TABLE document_institutions (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id     UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  institution_id  UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+  
+  role_ar         TEXT,
+  role_fr         TEXT,
+  role_type       VARCHAR(50),                                    -- 'issuer', 'addressee', 'mentioned', 'regulating'
+  
+  is_ai_extracted BOOLEAN DEFAULT FALSE,
+  confidence      NUMERIC(4, 3),
+  
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  CONSTRAINT doc_institutions_unique UNIQUE (document_id, institution_id, role_type)
+);
+
+CREATE INDEX idx_doc_institutions_document    ON document_institutions(document_id);
+CREATE INDEX idx_doc_institutions_institution ON document_institutions(institution_id);
+CREATE INDEX idx_doc_institutions_role_type   ON document_institutions(role_type);
+
+-- ------------------------------------
+-- TABLE: legal_relations
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_relations (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_type         TEXT NOT NULL,
+    source_id           UUID NOT NULL,
+    target_type         TEXT NOT NULL,
+    target_id           UUID NOT NULL,
+    relation_type       TEXT NOT NULL,
+    confidence          REAL DEFAULT 1.0,
+    detected_sentence   TEXT,
+    ai_explanation      TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_relations_source ON public.legal_relations(source_id);
+CREATE INDEX IF NOT EXISTS idx_legal_relations_target ON public.legal_relations(target_id);
+
+-- ------------------------------------
+-- TABLE: legal_citations
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_citations (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_document_id  UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    source_article_id   UUID REFERENCES public.articles(id) ON DELETE SET NULL,
+    target_document_id  UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    target_article_id   UUID REFERENCES public.articles(id) ON DELETE SET NULL,
+    citation_type       TEXT,
+    citation_sentence   TEXT,
+    ai_explanation      TEXT,
+    confidence          REAL DEFAULT 1.0,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_citations_source_doc ON public.legal_citations(source_document_id);
+CREATE INDEX IF NOT EXISTS idx_legal_citations_target_doc ON public.legal_citations(target_document_id);
+
+
+
+-- =========================================================
+-- FILE: 008_search_and_statistics.sql
+-- =========================================================
+-- ============================================================
+-- Migration 008: Search Index & Statistics
+-- ============================================================
+
+-- ------------------------------------
+-- SEARCH INDEX
+-- Materialized, denormalized search table for ultra-fast queries.
+-- Rebuilt periodically or on document change via trigger/cron.
+-- Designed for billions of search operations.
+-- ------------------------------------
+CREATE TABLE search_index (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- What is indexed
+  entity_type       VARCHAR(50) NOT NULL,                         -- 'document', 'person', 'institution', 'appointment'
+  entity_id         UUID NOT NULL,
+  
+  -- Denormalized display data (avoid JOINs at query time)
+  display_title_ar  TEXT,
+  display_title_fr  TEXT,
+  display_snippet_ar TEXT,                                        -- 200-char excerpt
+  display_snippet_fr TEXT,
+  document_type     document_type,
+  document_date     DATE,
+  issue_number      INTEGER,
+  institution_name_ar TEXT,
+  institution_name_fr TEXT,
+  status            document_status,
+  
+  -- Search vectors (combined for the entity)
+  search_vector_ar  TSVECTOR,                                     -- Arabic FTS
+  search_vector_fr  TSVECTOR,                                     -- French FTS
+  search_vector_en  TSVECTOR,                                     -- English FTS (future)
+  
+  -- Ranking signals
+  popularity_score  NUMERIC(10, 4) DEFAULT 0,                    -- Based on view counts
+  relevance_boost   NUMERIC(5, 4) DEFAULT 1.0,                   -- Manual editorial boost
+  
+  -- Timestamps
+  indexed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  entity_updated_at TIMESTAMPTZ,
+  
+  -- Prevent duplicate index entries
+  CONSTRAINT search_index_unique_entity UNIQUE (entity_type, entity_id)
+);
+
+-- Primary search index — the most important index in the database
+CREATE INDEX idx_search_vector_ar   ON search_index USING GIN(search_vector_ar);
+CREATE INDEX idx_search_vector_fr   ON search_index USING GIN(search_vector_fr);
+CREATE INDEX idx_search_vector_en   ON search_index USING GIN(search_vector_en);
+
+-- Filtering
+CREATE INDEX idx_search_entity_type ON search_index(entity_type);
+CREATE INDEX idx_search_doc_type    ON search_index(document_type);
+CREATE INDEX idx_search_status      ON search_index(status);
+CREATE INDEX idx_search_date        ON search_index(document_date DESC);
+CREATE INDEX idx_search_issue       ON search_index(issue_number DESC);
+CREATE INDEX idx_search_popularity  ON search_index(popularity_score DESC);
+
+-- Composite for ranked filtered searches (most common query pattern)
+CREATE INDEX idx_search_type_date_rank ON search_index(document_type, document_date DESC, popularity_score DESC)
+  WHERE status = 'published';
+
+
+-- ------------------------------------
+-- SEARCH QUERY LOG (AI Search audit + analytics)
+-- ------------------------------------
+CREATE TABLE search_queries (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- Who searched (anonymous or authenticated)
+  user_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  session_id      TEXT,
+  ip_address      INET,
+  
+  -- The query
+  query_text      TEXT NOT NULL,
+  query_language  language_code DEFAULT 'ar',
+  query_type      VARCHAR(50) DEFAULT 'fulltext',                 -- 'fulltext', 'ai', 'filter', 'autocomplete'
+  
+  -- Filters applied
+  filters         JSONB,                                          -- {type, date_range, institution_id, status, ...}
+  
+  -- Results
+  result_count    INTEGER,
+  result_ids      UUID[],                                         -- First 10 result UUIDs
+  clicked_result_id UUID REFERENCES documents(id) ON DELETE SET NULL,
+  
+  -- AI-specific
+  ai_intent       TEXT,                                           -- AI-classified user intent
+  ai_response     TEXT,                                           -- AI-generated answer snippet
+  ai_model        TEXT,                                           -- Which model answered
+  ai_tokens_used  INTEGER,
+  
+  -- Performance
+  duration_ms     INTEGER,
+  
+  -- Timestamp
+  searched_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_search_queries_user     ON search_queries(user_id);
+CREATE INDEX idx_search_queries_date     ON search_queries(searched_at DESC);
+CREATE INDEX idx_search_queries_type     ON search_queries(query_type);
+CREATE INDEX idx_search_queries_lang     ON search_queries(query_language);
+CREATE INDEX idx_search_queries_text_trgm ON search_queries USING GIN(query_text gin_trgm_ops);
+
+-- Partition by month for massive scale (comment out if Supabase plan doesn't support)
+-- CREATE TABLE search_queries_2024_01 PARTITION OF search_queries
+--   FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+
+
+-- ------------------------------------
+-- STATISTICS (pre-aggregated metrics)
+-- ------------------------------------
+CREATE TABLE statistics (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- What this stat is for
+  stat_key        VARCHAR(100) NOT NULL,                          -- e.g. 'documents_by_type', 'issues_by_year', 'appointments_by_institution'
+  period          stats_period NOT NULL,
+  period_start    DATE NOT NULL,
+  period_end      DATE NOT NULL,
+  
+  -- Dimensions (optional grouping)
+  dimension_type  VARCHAR(50),                                    -- e.g. 'document_type', 'institution', 'year'
+  dimension_value TEXT,                                           -- e.g. 'law', 'MIN-INT', '2024'
+  institution_id  UUID REFERENCES institutions(id) ON DELETE SET NULL,
+  
+  -- Values
+  count           BIGINT DEFAULT 0,
+  total_pages     BIGINT DEFAULT 0,
+  total_words     BIGINT DEFAULT 0,
+  
+  -- Additional payload
+  data            JSONB,                                          -- Flexible extra stats
+  
+  -- Freshness
+  computed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  CONSTRAINT statistics_unique UNIQUE (stat_key, period, period_start, dimension_type, dimension_value)
+);
+
+CREATE INDEX idx_statistics_key         ON statistics(stat_key);
+CREATE INDEX idx_statistics_period      ON statistics(period, period_start DESC);
+CREATE INDEX idx_statistics_institution ON statistics(institution_id);
+CREATE INDEX idx_statistics_dimension   ON statistics(dimension_type, dimension_value);
+
+COMMENT ON TABLE statistics IS 'Pre-aggregated statistics table. Populated by scheduled cron jobs or database triggers. Never query live data for dashboards — always read from here.';
+
+
+-- ------------------------------------
+-- PAGE VIEW ANALYTICS (lightweight)
+-- ------------------------------------
+CREATE TABLE page_views (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- What was viewed
+  entity_type     VARCHAR(50) NOT NULL,                           -- 'document', 'issue', 'person', 'institution'
+  entity_id       UUID NOT NULL,
+  
+  -- Who viewed
+  user_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  session_id      TEXT,
+  
+  -- Context
+  referrer        TEXT,
+  user_agent      TEXT,
+  
+  viewed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+) PARTITION BY RANGE (viewed_at);
+
+-- Create initial partitions (by quarter)
+CREATE TABLE page_views_2024_q1 PARTITION OF page_views
+  FOR VALUES FROM ('2024-01-01') TO ('2024-04-01');
+CREATE TABLE page_views_2024_q2 PARTITION OF page_views
+  FOR VALUES FROM ('2024-04-01') TO ('2024-07-01');
+CREATE TABLE page_views_2024_q3 PARTITION OF page_views
+  FOR VALUES FROM ('2024-07-01') TO ('2024-10-01');
+CREATE TABLE page_views_2024_q4 PARTITION OF page_views
+  FOR VALUES FROM ('2024-10-01') TO ('2025-01-01');
+CREATE TABLE page_views_2025    PARTITION OF page_views
+  FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE page_views_2026    PARTITION OF page_views
+  FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+CREATE TABLE page_views_future  PARTITION OF page_views
+  FOR VALUES FROM ('2027-01-01') TO ('2099-01-01');
+
+-- Indexes on each partition (auto-applied via parent)
+CREATE INDEX idx_page_views_entity   ON page_views(entity_type, entity_id);
+CREATE INDEX idx_page_views_user     ON page_views(user_id);
+CREATE INDEX idx_page_views_time     ON page_views(viewed_at DESC);
+
+COMMENT ON TABLE page_views IS 'Partitioned by quarter for efficient archival and pruning. Always insert into parent table; PostgreSQL routes to correct partition automatically.';
+
+-- ------------------------------------
+-- TABLE: legal_topics
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_topics (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code                TEXT UNIQUE NOT NULL,
+    name_ar             TEXT NOT NULL,
+    name_fr             TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+INSERT INTO public.legal_topics (code, name_ar, name_fr) VALUES
+  ('mining', 'المعادن والمحاجر', 'Mines et carrières'),
+  ('public_finance', 'المالية العامة', 'Finances publiques'),
+  ('administration', 'الإدارة العامة والتعيينات', 'Administration publique')
+ON CONFLICT (code) DO NOTHING;
+
+-- ------------------------------------
+-- TABLE: document_topics
+-- ------------------------------------
+CREATE TABLE IF NOT EXISTS public.document_topics (
+    document_id         UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+    topic_id            UUID REFERENCES public.legal_topics(id) ON DELETE CASCADE,
+    confidence          REAL DEFAULT 1.0,
+    PRIMARY KEY (document_id, topic_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_topics_doc ON public.document_topics(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_topics_top ON public.document_topics(topic_id);
+
+
+-- =========================================================
+-- FILE: 009_profiles_and_bookmarks.sql
+-- =========================================================
+-- ============================================================
+-- Migration 009: User Profiles & Bookmarks
+-- ============================================================
+
+-- ------------------------------------
+-- PROFILES (extends auth.users)
+-- ------------------------------------
+CREATE TABLE profiles (
+  id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- Display info
+  display_name    TEXT,
+  avatar_url      TEXT,
+  
+  -- Preferences
+  preferred_language  language_code NOT NULL DEFAULT 'ar',
+  preferred_theme     VARCHAR(20) DEFAULT 'system',              -- 'light', 'dark', 'system'
+  
+  -- Role & permissions
+  role            VARCHAR(50) NOT NULL DEFAULT 'reader',         -- 'reader', 'editor', 'admin', 'super_admin'
+  
+  -- Contact
+  phone           TEXT,
+  organization    TEXT,
+  job_title       TEXT,
+  
+  -- Activity stats
+  search_count    INTEGER DEFAULT 0,
+  last_active_at  TIMESTAMPTZ,
+  
+  -- Notifications
+  email_notifications BOOLEAN DEFAULT TRUE,
+  
+  -- Audit
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_profiles_role ON profiles(role);
+
+CREATE TRIGGER set_updated_at_profiles
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Auto-create profile on auth.users insert
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, display_name, preferred_language)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    COALESCE((NEW.raw_user_meta_data->>'language')::language_code, 'ar')
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+
+-- ------------------------------------
+-- BOOKMARKS (saved documents / persons / institutions)
+-- ------------------------------------
+CREATE TABLE bookmarks (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- What is bookmarked (one must be set)
+  document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
+  person_id       UUID REFERENCES persons(id) ON DELETE CASCADE,
+  institution_id  UUID REFERENCES institutions(id) ON DELETE CASCADE,
+  issue_id        UUID REFERENCES issues(id) ON DELETE CASCADE,
+  
+  -- Organization
+  collection_name TEXT DEFAULT 'default',
+  note            TEXT,
+  
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  CONSTRAINT bookmarks_one_entity CHECK (
+    (document_id IS NOT NULL)::INT +
+    (person_id IS NOT NULL)::INT +
+    (institution_id IS NOT NULL)::INT +
+    (issue_id IS NOT NULL)::INT = 1
+  )
+);
+
+CREATE INDEX idx_bookmarks_user         ON bookmarks(user_id);
+CREATE INDEX idx_bookmarks_document     ON bookmarks(document_id);
+CREATE INDEX idx_bookmarks_person       ON bookmarks(person_id);
+CREATE INDEX idx_bookmarks_collection   ON bookmarks(user_id, collection_name);
+
+-- Prevent duplicate bookmarks for same user + entity
+CREATE UNIQUE INDEX idx_bookmarks_user_document     ON bookmarks(user_id, document_id)     WHERE document_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_bookmarks_user_person       ON bookmarks(user_id, person_id)       WHERE person_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_bookmarks_user_institution  ON bookmarks(user_id, institution_id)  WHERE institution_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_bookmarks_user_issue        ON bookmarks(user_id, issue_id)        WHERE issue_id IS NOT NULL;
+
+
+-- ------------------------------------
+-- ALERTS (user-defined change notifications)
+-- ------------------------------------
+CREATE TABLE user_alerts (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- What to watch
+  alert_type      VARCHAR(50) NOT NULL,                          -- 'new_document', 'status_change', 'new_appointment', 'keyword_match'
+  
+  -- Filter criteria (JSON for flexibility)
+  criteria        JSONB NOT NULL,                                 -- {document_type, institution_id, keywords, person_id, ...}
+  
+  -- Delivery
+  channel         VARCHAR(20) DEFAULT 'email',                   -- 'email', 'in_app', 'both'
+  is_active       BOOLEAN DEFAULT TRUE,
+  
+  -- Tracking
+  last_triggered_at TIMESTAMPTZ,
+  trigger_count   INTEGER DEFAULT 0,
+  
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_alerts_user     ON user_alerts(user_id);
+CREATE INDEX idx_alerts_type     ON user_alerts(alert_type);
+CREATE INDEX idx_alerts_active   ON user_alerts(is_active);
+CREATE INDEX idx_alerts_criteria ON user_alerts USING GIN(criteria);
+
+
+-- =========================================================
+-- FILE: 010_rls_policies.sql
+-- =========================================================
+-- ============================================================
+-- Migration 010: Row-Level Security (RLS) Policies
+-- ============================================================
+
+-- ------------------------------------
+-- Enable RLS on all user-facing tables
+-- ------------------------------------
+ALTER TABLE issues              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE laws                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE decrees             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE decisions           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulations         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE circulars           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appointments        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE persons             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE institutions        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aliases             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_relations  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE law_relations        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_versions   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_persons    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_institutions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE search_index        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE search_queries      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE statistics          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bookmarks           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_alerts         ENABLE ROW LEVEL SECURITY;
+
+-- ------------------------------------
+-- Helper: check if current user has admin role
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT COALESCE(
+    (SELECT role IN ('admin', 'super_admin')
+     FROM profiles WHERE id = auth.uid()),
+    FALSE
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION is_editor_or_above()
+RETURNS BOOLEAN AS $$
+  SELECT COALESCE(
+    (SELECT role IN ('editor', 'admin', 'super_admin')
+     FROM profiles WHERE id = auth.uid()),
+    FALSE
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- PUBLIC READ POLICIES (published content is open to everyone)
+-- ============================================================
+
+-- ISSUES: public read for published issues
+CREATE POLICY "issues_public_read" ON issues
+  FOR SELECT USING (is_published = TRUE);
+
+CREATE POLICY "issues_admin_all" ON issues
+  FOR ALL USING (is_admin());
+
+-- DOCUMENTS: public read for published, current versions only
+CREATE POLICY "documents_public_read" ON documents
+  FOR SELECT USING (
+    status = 'published'
+    AND is_current_version = TRUE
+    AND is_confidential = FALSE
+  );
+
+CREATE POLICY "documents_editor_draft_read" ON documents
+  FOR SELECT USING (
+    is_editor_or_above()
+  );
+
+CREATE POLICY "documents_editor_write" ON documents
+  FOR INSERT WITH CHECK (is_editor_or_above());
+
+CREATE POLICY "documents_editor_update" ON documents
+  FOR UPDATE USING (is_editor_or_above());
+
+CREATE POLICY "documents_admin_delete" ON documents
+  FOR DELETE USING (is_admin());
+
+-- TYPE-SPECIFIC TABLES: inherit visibility from parent documents
+CREATE POLICY "laws_public_read" ON laws
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM documents d
+      WHERE d.id = laws.document_id
+        AND d.status = 'published'
+        AND d.is_current_version = TRUE
+    )
+  );
+CREATE POLICY "laws_editor_all" ON laws FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "decrees_public_read" ON decrees
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = decrees.document_id AND d.status = 'published' AND d.is_current_version = TRUE)
+  );
+CREATE POLICY "decrees_editor_all" ON decrees FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "decisions_public_read" ON decisions
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = decisions.document_id AND d.status = 'published' AND d.is_current_version = TRUE)
+  );
+CREATE POLICY "decisions_editor_all" ON decisions FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "regulations_public_read" ON regulations
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = regulations.document_id AND d.status = 'published' AND d.is_current_version = TRUE)
+  );
+CREATE POLICY "regulations_editor_all" ON regulations FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "circulars_public_read" ON circulars
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = circulars.document_id AND d.status = 'published' AND d.is_current_version = TRUE)
+  );
+CREATE POLICY "circulars_editor_all" ON circulars FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "announcements_public_read" ON announcements
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = announcements.document_id AND d.status = 'published' AND d.is_current_version = TRUE)
+  );
+CREATE POLICY "announcements_editor_all" ON announcements FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "notifications_public_read" ON notifications
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = notifications.document_id AND d.status = 'published' AND d.is_current_version = TRUE)
+  );
+CREATE POLICY "notifications_editor_all" ON notifications FOR ALL USING (is_editor_or_above());
+
+-- APPOINTMENTS: public read
+CREATE POLICY "appointments_public_read" ON appointments
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM documents d WHERE d.id = appointments.document_id AND d.status = 'published')
+  );
+CREATE POLICY "appointments_editor_all" ON appointments FOR ALL USING (is_editor_or_above());
+
+-- PERSONS: public read (active persons)
+CREATE POLICY "persons_public_read" ON persons
+  FOR SELECT USING (is_active = TRUE);
+CREATE POLICY "persons_editor_all" ON persons FOR ALL USING (is_editor_or_above());
+
+-- INSTITUTIONS: public read (active)
+CREATE POLICY "institutions_public_read" ON institutions
+  FOR SELECT USING (is_active = TRUE);
+CREATE POLICY "institutions_editor_all" ON institutions FOR ALL USING (is_editor_or_above());
+
+-- ALIASES: public read
+CREATE POLICY "aliases_public_read" ON aliases FOR SELECT USING (TRUE);
+CREATE POLICY "aliases_editor_all"  ON aliases FOR ALL USING (is_editor_or_above());
+
+-- RELATIONS: public read
+CREATE POLICY "doc_relations_public_read" ON document_relations FOR SELECT USING (TRUE);
+CREATE POLICY "doc_relations_editor_all"  ON document_relations FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "law_relations_public_read" ON law_relations FOR SELECT USING (TRUE);
+CREATE POLICY "law_relations_editor_all"  ON law_relations FOR ALL USING (is_editor_or_above());
+
+-- DOCUMENT VERSIONS: public read
+CREATE POLICY "doc_versions_public_read" ON document_versions FOR SELECT USING (TRUE);
+CREATE POLICY "doc_versions_editor_all"  ON document_versions FOR ALL USING (is_editor_or_above());
+
+-- JUNCTION TABLES: public read
+CREATE POLICY "doc_persons_public_read"       ON document_persons       FOR SELECT USING (TRUE);
+CREATE POLICY "doc_persons_editor_all"        ON document_persons       FOR ALL USING (is_editor_or_above());
+CREATE POLICY "doc_institutions_public_read"  ON document_institutions  FOR SELECT USING (TRUE);
+CREATE POLICY "doc_institutions_editor_all"   ON document_institutions  FOR ALL USING (is_editor_or_above());
+
+-- SEARCH INDEX: public read
+CREATE POLICY "search_index_public_read" ON search_index FOR SELECT USING (TRUE);
+CREATE POLICY "search_index_admin_all"   ON search_index FOR ALL USING (is_admin());
+
+-- STATISTICS: public read
+CREATE POLICY "statistics_public_read" ON statistics FOR SELECT USING (TRUE);
+CREATE POLICY "statistics_admin_all"   ON statistics FOR ALL USING (is_admin());
+
+-- SEARCH QUERIES: users see only their own, admins see all
+CREATE POLICY "search_queries_own_read" ON search_queries
+  FOR SELECT USING (user_id = auth.uid() OR is_admin());
+CREATE POLICY "search_queries_insert" ON search_queries
+  FOR INSERT WITH CHECK (TRUE);                                   -- Anyone can log a search
+
+-- PROFILES: users see own, admins see all
+CREATE POLICY "profiles_own_read" ON profiles
+  FOR SELECT USING (id = auth.uid() OR is_admin());
+CREATE POLICY "profiles_own_update" ON profiles
+  FOR UPDATE USING (id = auth.uid());
+CREATE POLICY "profiles_admin_all" ON profiles
+  FOR ALL USING (is_admin());
+
+-- BOOKMARKS: users manage only their own
+CREATE POLICY "bookmarks_own" ON bookmarks
+  FOR ALL USING (user_id = auth.uid());
+
+-- USER ALERTS: users manage only their own
+CREATE POLICY "alerts_own" ON user_alerts
+  FOR ALL USING (user_id = auth.uid());
+
+
+-- =========================================================
+-- FILE: 011_functions_and_views.sql
+-- =========================================================
+-- ============================================================
+-- Migration 011: Database Functions & Views
+-- ============================================================
+
+-- ------------------------------------
+-- FUNCTION: Full-text search across all entity types
+-- Searches documents, persons, and institutions in one call.
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION search_all(
+  p_query         TEXT,
+  p_language      language_code    DEFAULT 'ar',
+  p_entity_types  TEXT[]           DEFAULT ARRAY['document', 'person', 'institution'],
+  p_document_type document_type    DEFAULT NULL,
+  p_status        document_status  DEFAULT 'published',
+  p_date_from     DATE             DEFAULT NULL,
+  p_date_to       DATE             DEFAULT NULL,
+  p_limit         INTEGER          DEFAULT 20,
+  p_offset        INTEGER          DEFAULT 0
+)
+RETURNS TABLE (
+  entity_type       TEXT,
+  entity_id         UUID,
+  display_title     TEXT,
+  display_snippet   TEXT,
+  document_type     document_type,
+  document_date     DATE,
+  issue_number      INTEGER,
+  institution_name  TEXT,
+  rank              FLOAT4
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
+DECLARE
+  v_tsquery     TSQUERY;
+  v_config      REGCONFIG;
+BEGIN
+  -- Select text search config based on language
+  v_config := CASE p_language
+    WHEN 'ar' THEN 'arabic'::REGCONFIG
+    WHEN 'fr' THEN 'french'::REGCONFIG
+    ELSE 'simple'::REGCONFIG
+  END;
+
+  -- Build tsquery safely
+  BEGIN
+    v_tsquery := plainto_tsquery(v_config, p_query);
+  EXCEPTION WHEN OTHERS THEN
+    v_tsquery := plainto_tsquery('simple', p_query);
+  END;
+
+  RETURN QUERY
+  SELECT
+    si.entity_type,
+    si.entity_id,
+    CASE p_language
+      WHEN 'ar' THEN COALESCE(si.display_title_ar, si.display_title_fr)
+      WHEN 'fr' THEN COALESCE(si.display_title_fr, si.display_title_ar)
+      ELSE COALESCE(si.display_title_ar, si.display_title_fr)
+    END AS display_title,
+    CASE p_language
+      WHEN 'ar' THEN COALESCE(si.display_snippet_ar, si.display_snippet_fr)
+      WHEN 'fr' THEN COALESCE(si.display_snippet_fr, si.display_snippet_ar)
+      ELSE COALESCE(si.display_snippet_ar, si.display_snippet_fr)
+    END AS display_snippet,
+    si.document_type,
+    si.document_date,
+    si.issue_number,
+    CASE p_language
+      WHEN 'fr' THEN COALESCE(si.institution_name_fr, si.institution_name_ar)
+      ELSE COALESCE(si.institution_name_ar, si.institution_name_fr)
+    END AS institution_name,
+    ts_rank_cd(
+      CASE p_language
+        WHEN 'ar' THEN si.search_vector_ar
+        WHEN 'fr' THEN si.search_vector_fr
+        ELSE si.search_vector_ar
+      END,
+      v_tsquery
+    ) * si.relevance_boost + (si.popularity_score / 1000.0)::FLOAT4 AS rank
+  FROM search_index si
+  WHERE
+    -- Entity type filter
+    si.entity_type = ANY(p_entity_types)
+    -- Full-text match
+    AND (
+      CASE p_language
+        WHEN 'ar' THEN si.search_vector_ar @@ v_tsquery
+        WHEN 'fr' THEN si.search_vector_fr @@ v_tsquery
+        ELSE si.search_vector_ar @@ v_tsquery OR si.search_vector_fr @@ v_tsquery
+      END
+    )
+    -- Optional filters
+    AND (p_document_type IS NULL OR si.document_type = p_document_type)
+    AND (p_status IS NULL OR si.status = p_status)
+    AND (p_date_from IS NULL OR si.document_date >= p_date_from)
+    AND (p_date_to IS NULL OR si.document_date <= p_date_to)
+  ORDER BY rank DESC
+  LIMIT p_limit
+  OFFSET p_offset;
+END;
+$$;
+
+
+-- ------------------------------------
+-- FUNCTION: Refresh search_index for a single entity
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION refresh_search_index_for_document(p_document_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_doc documents%ROWTYPE;
+  v_institution_name_ar TEXT;
+  v_institution_name_fr TEXT;
+BEGIN
+  SELECT * INTO v_doc FROM documents WHERE id = p_document_id;
+  IF NOT FOUND THEN RETURN; END IF;
+
+  SELECT name_ar, name_fr INTO v_institution_name_ar, v_institution_name_fr
+  FROM institutions WHERE id = v_doc.institution_id;
+
+  INSERT INTO search_index (
+    entity_type, entity_id,
+    display_title_ar, display_title_fr,
+    display_snippet_ar, display_snippet_fr,
+    document_type, document_date, issue_number,
+    institution_name_ar, institution_name_fr,
+    status,
+    search_vector_ar, search_vector_fr,
+    entity_updated_at
+  )
+  SELECT
+    'document',
+    v_doc.id,
+    v_doc.title_ar,
+    v_doc.title_fr,
+    LEFT(v_doc.summary_ar, 200),
+    LEFT(v_doc.summary_fr, 200),
+    v_doc.type,
+    v_doc.document_date,
+    iss.issue_number,
+    v_institution_name_ar,
+    v_institution_name_fr,
+    v_doc.status,
+    v_doc.search_vector,
+    v_doc.search_vector,
+    v_doc.updated_at
+  FROM issues iss WHERE iss.id = v_doc.issue_id
+  ON CONFLICT (entity_type, entity_id) DO UPDATE SET
+    display_title_ar      = EXCLUDED.display_title_ar,
+    display_title_fr      = EXCLUDED.display_title_fr,
+    display_snippet_ar    = EXCLUDED.display_snippet_ar,
+    display_snippet_fr    = EXCLUDED.display_snippet_fr,
+    document_type         = EXCLUDED.document_type,
+    document_date         = EXCLUDED.document_date,
+    status                = EXCLUDED.status,
+    search_vector_ar      = EXCLUDED.search_vector_ar,
+    search_vector_fr      = EXCLUDED.search_vector_fr,
+    institution_name_ar   = EXCLUDED.institution_name_ar,
+    institution_name_fr   = EXCLUDED.institution_name_fr,
+    entity_updated_at     = EXCLUDED.entity_updated_at,
+    indexed_at            = NOW();
+END;
+$$;
+
+-- Trigger: auto-update search_index when a document changes
+CREATE OR REPLACE FUNCTION trigger_refresh_search_index()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM refresh_search_index_for_document(NEW.id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER refresh_search_on_document_change
+  AFTER INSERT OR UPDATE ON documents
+  FOR EACH ROW EXECUTE FUNCTION trigger_refresh_search_index();
+
+
+-- ------------------------------------
+-- FUNCTION: Get document lineage (full version chain)
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION get_document_lineage(p_document_id UUID)
+RETURNS TABLE (
+  id            UUID,
+  version       INTEGER,
+  status        document_status,
+  official_number TEXT,
+  document_date DATE,
+  change_type   TEXT,
+  change_summary_ar TEXT
+)
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  WITH RECURSIVE lineage AS (
+    -- Start from the given document
+    SELECT d.id, d.version, d.status, d.official_number, d.document_date, d.parent_id
+    FROM documents d WHERE d.id = p_document_id
+    UNION ALL
+    -- Walk up the version chain
+    SELECT d.id, d.version, d.status, d.official_number, d.document_date, d.parent_id
+    FROM documents d
+    JOIN lineage l ON d.id = l.parent_id
+  )
+  SELECT
+    l.id, l.version, l.status, l.official_number, l.document_date,
+    dv.change_type,
+    dv.change_summary_ar
+  FROM lineage l
+  LEFT JOIN document_versions dv ON dv.document_id = l.id AND dv.version = l.version
+  ORDER BY l.version DESC;
+$$;
+
+
+-- ------------------------------------
+-- FUNCTION: Get appointment history for a person
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION get_person_appointment_history(p_person_id UUID)
+RETURNS TABLE (
+  appointment_id    UUID,
+  appointment_type  appointment_type,
+  position_title_ar TEXT,
+  position_title_fr TEXT,
+  institution_name_ar TEXT,
+  institution_name_fr TEXT,
+  appointment_date  DATE,
+  effective_date    DATE,
+  end_date          DATE,
+  document_id       UUID,
+  issue_number      INTEGER
+)
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT
+    a.id,
+    a.appointment_type,
+    a.position_title_ar,
+    a.position_title_fr,
+    i.name_ar,
+    i.name_fr,
+    a.appointment_date,
+    a.effective_date,
+    a.end_date,
+    a.document_id,
+    iss.issue_number
+  FROM appointments a
+  LEFT JOIN institutions i ON i.id = a.institution_id
+  LEFT JOIN documents d ON d.id = a.document_id
+  LEFT JOIN issues iss ON iss.id = d.issue_id
+  WHERE a.person_id = p_person_id
+  ORDER BY a.appointment_date DESC;
+$$;
+
+
+-- ------------------------------------
+-- FUNCTION: Compute and store statistics snapshot
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION compute_statistics_snapshot()
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_today DATE := CURRENT_DATE;
+BEGIN
+  -- Documents by type (monthly)
+  INSERT INTO statistics (stat_key, period, period_start, period_end, dimension_type, dimension_value, count)
+  SELECT
+    'documents_by_type',
+    'monthly',
+    date_trunc('month', v_today)::DATE,
+    (date_trunc('month', v_today) + INTERVAL '1 month - 1 day')::DATE,
+    'document_type',
+    type::TEXT,
+    COUNT(*)
+  FROM documents
+  WHERE status = 'published' AND is_current_version = TRUE
+  GROUP BY type
+  ON CONFLICT (stat_key, period, period_start, dimension_type, dimension_value)
+  DO UPDATE SET count = EXCLUDED.count, computed_at = NOW();
+
+  -- Documents by year
+  INSERT INTO statistics (stat_key, period, period_start, period_end, dimension_type, dimension_value, count)
+  SELECT
+    'documents_by_year',
+    'yearly',
+    DATE(EXTRACT(YEAR FROM document_date)::TEXT || '-01-01'),
+    DATE(EXTRACT(YEAR FROM document_date)::TEXT || '-12-31'),
+    'year',
+    EXTRACT(YEAR FROM document_date)::TEXT,
+    COUNT(*)
+  FROM documents
+  WHERE status = 'published' AND is_current_version = TRUE
+  GROUP BY EXTRACT(YEAR FROM document_date)
+  ON CONFLICT (stat_key, period, period_start, dimension_type, dimension_value)
+  DO UPDATE SET count = EXCLUDED.count, computed_at = NOW();
+
+  -- Total issues
+  INSERT INTO statistics (stat_key, period, period_start, period_end, count)
+  VALUES (
+    'total_issues', 'monthly',
+    date_trunc('month', v_today)::DATE,
+    (date_trunc('month', v_today) + INTERVAL '1 month - 1 day')::DATE,
+    (SELECT COUNT(*) FROM issues WHERE is_published = TRUE)
+  )
+  ON CONFLICT (stat_key, period, period_start, dimension_type, dimension_value)
+  DO UPDATE SET count = EXCLUDED.count, computed_at = NOW();
+END;
+$$;
+
+
+-- ------------------------------------
+-- VIEWS: Convenience views for API layer
+-- ------------------------------------
+
+-- Latest gazette issues (for homepage)
+CREATE VIEW v_latest_issues AS
+  SELECT
+    i.*,
+    COUNT(d.id) AS total_documents
+  FROM issues i
+  LEFT JOIN documents d ON d.issue_id = i.id AND d.status = 'published' AND d.is_current_version = TRUE
+  WHERE i.is_published = TRUE
+  GROUP BY i.id
+  ORDER BY i.publication_date DESC;
+
+-- Published documents with institution name (for list pages)
+CREATE VIEW v_documents_with_institution AS
+  SELECT
+    d.*,
+    inst.name_ar AS institution_name_ar,
+    inst.name_fr AS institution_name_fr,
+    inst.short_name_ar AS institution_short_ar,
+    inst.short_name_fr AS institution_short_fr,
+    i.issue_number,
+    i.publication_date AS issue_date
+  FROM documents d
+  LEFT JOIN institutions inst ON inst.id = d.institution_id
+  LEFT JOIN issues i ON i.id = d.issue_id
+  WHERE d.status = 'published' AND d.is_current_version = TRUE;
+
+-- Recent appointments with person and institution (for homepage)
+CREATE VIEW v_recent_appointments AS
+  SELECT
+    a.*,
+    p.full_name_ar AS person_full_name_ar,
+    p.full_name_fr AS person_full_name_fr,
+    p.photo_url,
+    inst.name_ar AS institution_name_ar,
+    inst.name_fr AS institution_name_fr,
+    d.official_number AS document_official_number,
+    i.issue_number,
+    i.publication_date
+  FROM appointments a
+  LEFT JOIN persons p ON p.id = a.person_id
+  LEFT JOIN institutions inst ON inst.id = a.institution_id
+  JOIN documents d ON d.id = a.document_id AND d.status = 'published'
+  JOIN issues i ON i.id = d.issue_id
+  ORDER BY a.appointment_date DESC;
+
+-- ------------------------------------
+-- VIEW: entities
+-- ------------------------------------
+CREATE OR REPLACE VIEW public.entities AS
+  SELECT id, full_name_ar AS name_ar, full_name_fr AS name_fr, 'person' AS entity_type FROM public.persons
+  UNION ALL
+  SELECT id, name_ar, name_fr, 'institution' AS entity_type FROM public.institutions;
+
+-- ------------------------------------
+-- VIEW: document_entities
+-- ------------------------------------
+CREATE OR REPLACE VIEW public.document_entities AS
+  SELECT document_id, person_id AS entity_id, 'person' AS entity_type, role_ar AS role FROM public.document_persons
+  UNION ALL
+  SELECT document_id, institution_id AS entity_id, 'institution' AS entity_type, role_ar AS role FROM public.document_institutions;
+
+-- ------------------------------------
+-- VIEW: timeline_events
+-- ------------------------------------
+CREATE OR REPLACE VIEW public.timeline_events AS
+  SELECT 
+    le.id,
+    le.event_date AS date,
+    le.title_ar AS title,
+    le.description_ar AS description,
+    le.event_type AS type,
+    COALESCE(p.full_name_ar, inst.name_ar) AS entity,
+    d.official_number AS reference_number,
+    CASE 
+      WHEN le.event_type = 'appointment' THEN 'bg-green-500'
+      WHEN le.event_type = 'law' THEN 'bg-blue-500'
+      WHEN le.event_type = 'repeal' THEN 'bg-red-500'
+      ELSE 'bg-gray-500'
+    END AS color
+  FROM public.legal_events le
+  LEFT JOIN public.persons p ON p.id = le.person_id
+  LEFT JOIN public.institutions inst ON inst.id = le.institution_id
+  LEFT JOIN public.documents d ON d.id = le.document_id;
+
+
+
+-- =========================================================
+-- FILE: 012_seed_data.sql
+-- =========================================================
+-- ============================================================
+-- Migration 012: Seed Data (Reference & Demo)
+-- ============================================================
+
+-- ------------------------------------
+-- Mauritanian Wilayas (Regions) as reference data
+-- ------------------------------------
+INSERT INTO institutions (code, category, name_ar, name_fr, level, is_active) VALUES
+  ('WILAYA-NOUAKCHOTT-NORD',   'regional_authority', 'ولاية نواكشوط الشمالية',  'Wilaya de Nouakchott Nord',   1, TRUE),
+  ('WILAYA-NOUAKCHOTT-OUEST',  'regional_authority', 'ولاية نواكشوط الغربية',   'Wilaya de Nouakchott Ouest',  1, TRUE),
+  ('WILAYA-NOUAKCHOTT-SUD',    'regional_authority', 'ولاية نواكشوط الجنوبية',   'Wilaya de Nouakchott Sud',    1, TRUE),
+  ('WILAYA-HODH-CHARGUI',      'regional_authority', 'ولاية الحوض الشرقي',        'Wilaya du Hodh El Chargui',   1, TRUE),
+  ('WILAYA-HODH-GHARBI',       'regional_authority', 'ولاية الحوض الغربي',        'Wilaya du Hodh El Gharbi',    1, TRUE),
+  ('WILAYA-ASSABA',            'regional_authority', 'ولاية العصابة',             'Wilaya de l''Assaba',         1, TRUE),
+  ('WILAYA-GORGOL',            'regional_authority', 'ولاية كوركول',              'Wilaya du Gorgol',            1, TRUE),
+  ('WILAYA-BRAKNA',            'regional_authority', 'ولاية البراكنة',             'Wilaya du Brakna',            1, TRUE),
+  ('WILAYA-TRARZA',            'regional_authority', 'ولاية الترارزة',             'Wilaya du Trarza',            1, TRUE),
+  ('WILAYA-ADRAR',             'regional_authority', 'ولاية آدرار',               'Wilaya de l''Adrar',          1, TRUE),
+  ('WILAYA-DAKHLET-NOUADHIBOU','regional_authority', 'ولاية داخلة نواذيبو',       'Wilaya de Dakhlet Nouadhibou',1, TRUE),
+  ('WILAYA-TAGANT',            'regional_authority', 'ولاية تكانت',               'Wilaya du Tagant',            1, TRUE),
+  ('WILAYA-GUIDIMAKA',         'regional_authority', 'ولاية كيدي ماغة',           'Wilaya du Guidimakha',        1, TRUE),
+  ('WILAYA-TIRIS-ZEMMOUR',     'regional_authority', 'ولاية تيرس زمور',           'Wilaya du Tiris Zemmour',     1, TRUE),
+  ('WILAYA-INCHIRI',           'regional_authority', 'ولاية انشيري',              'Wilaya de l''Inchiri',        1, TRUE)
+ON CONFLICT (code) DO NOTHING;
+
+-- ------------------------------------
+-- Key Institutions
+-- ------------------------------------
+INSERT INTO institutions (code, category, name_ar, name_fr, short_name_ar, short_name_fr, level, is_active) VALUES
+  ('PRESIDENCE',        'presidency',           'رئاسة الجمهورية الإسلامية الموريتانية',   'Présidence de la République Islamique de Mauritanie', 'الرئاسة',        'Présidence',          1, TRUE),
+  ('PREMIER-MINISTERE', 'ministry',             'الوزارة الأولى',                           'Premier Ministère',                                   'الوزارة الأولى', 'PM',                  1, TRUE),
+  ('MIN-INT',           'ministry',             'وزارة الداخلية واللامركزية',               'Ministère de l''Intérieur et de la Décentralisation', 'داخلية',         'MIN INT',             1, TRUE),
+  ('MIN-FIN',           'ministry',             'وزارة المالية',                             'Ministère des Finances',                              'مالية',          'MIN FIN',             1, TRUE),
+  ('MIN-JUST',          'ministry',             'وزارة العدل',                               'Ministère de la Justice',                             'عدل',            'MIN JUST',            1, TRUE),
+  ('MIN-EDU',           'ministry',             'وزارة التربية الوطنية',                    'Ministère de l''Éducation Nationale',                 'تعليم',          'MIN EDU',             1, TRUE),
+  ('MIN-SANTE',         'ministry',             'وزارة الصحة',                               'Ministère de la Santé',                               'صحة',            'MIN SANTE',           1, TRUE),
+  ('MIN-AFFETRANG',     'ministry',             'وزارة الشؤون الخارجية والتعاون',           'Ministère des Affaires Étrangères et de la Coopération','خارجية',       'MAE',                 1, TRUE),
+  ('ASSEMBLEE',         'parliament',           'الجمعية الوطنية',                          'Assemblée Nationale',                                 'الجمعية',        'AN',                  1, TRUE),
+  ('SENAT',             'parliament',           'مجلس الشيوخ',                               'Sénat',                                               'الشيوخ',         'Sénat',               1, TRUE),
+  ('CONSEIL-CONST',     'constitutional_council','المجلس الدستوري',                         'Conseil Constitutionnel',                             'دستوري',         'CC',                  1, TRUE),
+  ('COUR-SUP',          'supreme_court',        'المحكمة العليا',                            'Cour Suprême',                                        'عليا',           'CS',                  1, TRUE),
+  ('BCM',               'public_agency',        'البنك المركزي الموريتاني',                 'Banque Centrale de Mauritanie',                       'بنك مركزي',      'BCM',                 1, TRUE),
+  ('SOMELEC',           'public_enterprise',    'الشركة الموريتانية للكهرباء',              'Société Mauritanienne d''Électricité',                'سوملك',          'SOMELEC',             1, TRUE),
+  ('SNDE',              'public_enterprise',    'الشركة الوطنية للماء',                     'Société Nationale de l''Eau',                         'صندوق الماء',    'SNDE',                1, TRUE)
+ON CONFLICT (code) DO NOTHING;
+
+-- ------------------------------------
+-- Demo: One sample gazette issue
+-- ------------------------------------
+INSERT INTO issues (
+  issue_number, issue_number_display,
+  publication_date,
+  title_ar, title_fr,
+  is_published, is_special_edition
+) VALUES (
+  1456, '1456',
+  '2024-01-15',
+  'الجريدة الرسمية للجمهورية الإسلامية الموريتانية - العدد 1456',
+  'Journal Officiel de la République Islamique de Mauritanie - N° 1456',
+  TRUE, FALSE
+) ON CONFLICT (issue_number) DO NOTHING;
+
+
+-- =========================================================
+-- FILE: 013_upload_center.sql
+-- =========================================================
+-- ============================================================
+-- Migration 013: Upload Center — Jobs & Extracted Documents
+-- ============================================================
+
+-- ------------------------------------
+-- UPLOAD JOBS: tracks each gazette PDF upload + processing run
+-- ------------------------------------
+CREATE TYPE job_status AS ENUM (
+  'pending',          -- Just uploaded, not yet processed
+  'extracting_text',  -- PDF text extraction in progress
+  'running_ocr',      -- OCR pass in progress
+  'detecting_structure', -- Splitting into individual documents
+  'classifying',      -- AI classification in progress
+  'review',           -- Human review stage (processing done)
+  'publishing',       -- Publishing approved docs to documents table
+  'completed',        -- All done
+  'failed'            -- Unrecoverable error
+);
+
+CREATE TABLE upload_jobs (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Linked gazette issue (may be created during processing)
+  issue_id              UUID REFERENCES issues(id) ON DELETE SET NULL,
+
+  -- File info
+  original_filename     TEXT NOT NULL,
+  pdf_storage_path      TEXT NOT NULL,                -- Supabase Storage path
+  pdf_public_url        TEXT,
+  pdf_file_size_bytes   BIGINT,
+  pdf_page_count        INTEGER,
+  pdf_checksum          TEXT,                         -- SHA-256
+
+  -- Processing state
+  status                job_status NOT NULL DEFAULT 'pending',
+  progress_percent      SMALLINT DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100),
+  current_step_label    TEXT,                         -- Human-readable current step
+
+  -- Results summary
+  total_pages_processed INTEGER DEFAULT 0,
+  documents_extracted   INTEGER DEFAULT 0,
+  documents_approved    INTEGER DEFAULT 0,
+  documents_published   INTEGER DEFAULT 0,
+  documents_rejected    INTEGER DEFAULT 0,
+
+  -- OCR info
+  required_ocr          BOOLEAN DEFAULT FALSE,
+  ocr_language          TEXT DEFAULT 'ara+fra',       -- Tesseract language codes
+  avg_text_confidence   NUMERIC(5,2),                 -- 0–100
+
+  -- Gazette metadata (detected or manually set)
+  detected_issue_number INTEGER,
+  detected_pub_date     DATE,
+  issue_confirmed       BOOLEAN DEFAULT FALSE,
+
+  -- Errors
+  error_message         TEXT,
+  error_details         JSONB,
+  retry_count           SMALLINT DEFAULT 0,
+
+  -- Timing
+  upload_completed_at   TIMESTAMPTZ,
+  processing_started_at TIMESTAMPTZ,
+  processing_ended_at   TIMESTAMPTZ,
+  processing_duration_ms INTEGER GENERATED ALWAYS AS (
+    CASE
+      WHEN processing_started_at IS NOT NULL AND processing_ended_at IS NOT NULL
+      THEN EXTRACT(EPOCH FROM (processing_ended_at - processing_started_at))::INTEGER * 1000
+      ELSE NULL
+    END
+  ) STORED,
+
+  -- Who uploaded
+  uploaded_by           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  reviewed_by           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+
+  -- Audit
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_upload_jobs_status       ON upload_jobs(status);
+CREATE INDEX idx_upload_jobs_issue_id     ON upload_jobs(issue_id);
+CREATE INDEX idx_upload_jobs_uploaded_by  ON upload_jobs(uploaded_by);
+CREATE INDEX idx_upload_jobs_created_at   ON upload_jobs(created_at DESC);
+
+CREATE TRIGGER set_updated_at_upload_jobs
+  BEFORE UPDATE ON upload_jobs
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- ------------------------------------
+-- UPLOAD JOB LOGS: step-by-step processing log
+-- ------------------------------------
+CREATE TABLE upload_job_logs (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  job_id      UUID NOT NULL REFERENCES upload_jobs(id) ON DELETE CASCADE,
+  level       VARCHAR(10) NOT NULL DEFAULT 'info' CHECK (level IN ('info', 'warn', 'error', 'debug')),
+  message     TEXT NOT NULL,
+  details     JSONB,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_job_logs_job_id    ON upload_job_logs(job_id);
+CREATE INDEX idx_job_logs_level     ON upload_job_logs(level);
+CREATE INDEX idx_job_logs_created   ON upload_job_logs(created_at DESC);
+
+
+-- ------------------------------------
+-- EXTRACTED DOCUMENTS: staging table before publishing
+-- One row per detected document in a gazette issue
+-- ------------------------------------
+CREATE TYPE extraction_review_status AS ENUM (
+  'pending_review',   -- Waiting for human review
+  'approved',         -- Approved, ready to publish
+  'rejected',         -- Rejected, will not be published
+  'published',        -- Already published to documents table
+  'needs_correction'  -- Has corrections needed flagged by reviewer
+);
+
+CREATE TABLE extracted_documents (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Parent job
+  job_id                UUID NOT NULL REFERENCES upload_jobs(id) ON DELETE CASCADE,
+
+  -- If published, links to the created document
+  document_id           UUID REFERENCES documents(id) ON DELETE SET NULL,
+
+  -- Position in gazette
+  sequence_in_issue     INTEGER NOT NULL,              -- Order within the gazette (1, 2, 3...)
+  pdf_page_start        INTEGER,
+  pdf_page_end          INTEGER,
+
+  -- ── EXTRACTED FIELDS (auto-detected, editable before publish) ──
+
+  -- Classification
+  detected_type         document_type,
+  confirmed_type        document_type,                 -- Set by reviewer; if NULL use detected_type
+  classification_confidence NUMERIC(5,2),              -- 0–100, how sure was the classifier
+  classification_model  TEXT,                          -- e.g. 'gemini-1.5-flash', 'regex-v1'
+  classification_reasons JSONB,                        -- Array of signals that drove the classification
+
+  -- Official number (extracted from text)
+  detected_official_number  TEXT,
+  confirmed_official_number TEXT,
+
+  -- Dates
+  detected_date         DATE,
+  confirmed_date        DATE,
+
+  -- Institution (detected)
+  detected_institution_name_ar  TEXT,
+  detected_institution_name_fr  TEXT,
+  confirmed_institution_id      UUID REFERENCES institutions(id) ON DELETE SET NULL,
+
+  -- Multilingual titles (extracted)
+  detected_title_ar     TEXT,
+  detected_title_fr     TEXT,
+  confirmed_title_ar    TEXT,
+  confirmed_title_fr    TEXT,
+
+  -- Full extracted text
+  raw_text_ar           TEXT,                          -- Arabic raw extraction
+  raw_text_fr           TEXT,                          -- French raw extraction
+  raw_text_mixed        TEXT,                          -- Mixed/unknown
+
+  -- Cleaned text (after post-processing)
+  cleaned_text_ar       TEXT,
+  cleaned_text_fr       TEXT,
+
+  -- OCR-specific
+  ocr_used              BOOLEAN DEFAULT FALSE,
+  ocr_confidence        NUMERIC(5,2),                  -- Average word confidence (0–100)
+  ocr_word_count        INTEGER,
+  low_confidence_regions JSONB,                        -- [{page, bbox, confidence}]
+
+  -- Structure analysis
+  has_articles          BOOLEAN DEFAULT FALSE,
+  articles_count        INTEGER,
+  has_preamble          BOOLEAN DEFAULT FALSE,
+  has_signatures        BOOLEAN DEFAULT FALSE,
+  detected_signatories  TEXT[],                        -- Names found in signature block
+  detected_keywords     TEXT[],
+
+  -- AI-generated summary
+  ai_summary_ar         TEXT,
+  ai_summary_fr         TEXT,
+  ai_keywords           TEXT[],
+
+  -- Review
+  review_status         extraction_review_status NOT NULL DEFAULT 'pending_review',
+  reviewer_notes        TEXT,
+  corrections           JSONB,                         -- {field: {old, new}} diff of reviewer edits
+  reviewed_at           TIMESTAMPTZ,
+  reviewed_by           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  published_at          TIMESTAMPTZ,
+
+  -- Overall quality score
+  extraction_quality_score NUMERIC(5,2),               -- Computed: 0–100
+  
+  -- Audit
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_extracted_job_id         ON extracted_documents(job_id);
+CREATE INDEX idx_extracted_document_id    ON extracted_documents(document_id);
+CREATE INDEX idx_extracted_type           ON extracted_documents(detected_type);
+CREATE INDEX idx_extracted_review_status  ON extracted_documents(review_status);
+CREATE INDEX idx_extracted_sequence       ON extracted_documents(job_id, sequence_in_issue);
+CREATE INDEX idx_extracted_confidence     ON extracted_documents(classification_confidence DESC);
+CREATE INDEX idx_extracted_institution    ON extracted_documents(confirmed_institution_id);
+
+CREATE TRIGGER set_updated_at_extracted_documents
+  BEFORE UPDATE ON extracted_documents
+  FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- ------------------------------------
+-- RLS for new tables
+-- ------------------------------------
+ALTER TABLE upload_jobs           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE upload_job_logs       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extracted_documents   ENABLE ROW LEVEL SECURITY;
+
+-- Upload jobs: editors see all, readers see nothing
+CREATE POLICY "upload_jobs_editor_all"
+  ON upload_jobs FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "upload_job_logs_editor_all"
+  ON upload_job_logs FOR ALL USING (is_editor_or_above());
+
+CREATE POLICY "extracted_documents_editor_all"
+  ON extracted_documents FOR ALL USING (is_editor_or_above());
+
+-- ------------------------------------
+-- FUNCTION: compute extraction quality score
+-- ------------------------------------
+CREATE OR REPLACE FUNCTION compute_extraction_quality(p_id UUID)
+RETURNS NUMERIC(5,2) LANGUAGE plpgsql AS $$
+DECLARE
+  v_doc extracted_documents%ROWTYPE;
+  v_score NUMERIC := 0;
+BEGIN
+  SELECT * INTO v_doc FROM extracted_documents WHERE id = p_id;
+
+  -- Classification confidence (0-40 pts)
+  v_score := v_score + LEAST(COALESCE(v_doc.classification_confidence, 0) * 0.4, 40);
+
+  -- OCR confidence (0-30 pts) or text extraction quality
+  IF v_doc.ocr_used THEN
+    v_score := v_score + LEAST(COALESCE(v_doc.ocr_confidence, 0) * 0.3, 30);
+  ELSE
+    -- Non-OCR text assumed high quality
+    IF v_doc.raw_text_ar IS NOT NULL OR v_doc.raw_text_fr IS NOT NULL THEN
+      v_score := v_score + 30;
+    END IF;
+  END IF;
+
+  -- Has title (10 pts)
+  IF v_doc.detected_title_ar IS NOT NULL OR v_doc.detected_title_fr IS NOT NULL THEN
+    v_score := v_score + 10;
+  END IF;
+
+  -- Has official number (10 pts)
+  IF v_doc.detected_official_number IS NOT NULL THEN
+    v_score := v_score + 10;
+  END IF;
+
+  -- Has date (10 pts)
+  IF v_doc.detected_date IS NOT NULL THEN
+    v_score := v_score + 10;
+  END IF;
+
+  -- Update the score
+  UPDATE extracted_documents
+    SET extraction_quality_score = v_score
+    WHERE id = p_id;
+
+  RETURN v_score;
+END;
+$$;
+
+COMMENT ON TABLE upload_jobs IS 'Tracks each gazette PDF upload through the full extraction pipeline.';
+COMMENT ON TABLE extracted_documents IS 'Staging table for extracted documents before human review and publish. Never read by the public — only editors see this.';
+
+
+-- =========================================================
+-- FILE: 014_ner_fuzzy_matching.sql
+-- =========================================================
+-- ============================================================
+-- Migration 014: NER Fuzzy Matching RPCs
+-- ============================================================
+
+-- Function to fuzzy match persons using pg_trgm similarity
+CREATE OR REPLACE FUNCTION match_person_fuzzy(
+  p_name TEXT,
+  p_threshold FLOAT DEFAULT 0.85
+)
+RETURNS TABLE (
+  id UUID,
+  full_name_ar TEXT,
+  similarity FLOAT
+)
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT 
+    id, 
+    full_name_ar,
+    similarity(full_name_ar, p_name) AS similarity
+  FROM persons
+  WHERE full_name_ar % p_name -- uses gin_trgm_ops index for speed
+    AND similarity(full_name_ar, p_name) > p_threshold
+  ORDER BY similarity DESC
+  LIMIT 5;
+$$;
+
+-- Function to fuzzy match institutions
+CREATE OR REPLACE FUNCTION match_institution_fuzzy(
+  p_name TEXT,
+  p_threshold FLOAT DEFAULT 0.85
+)
+RETURNS TABLE (
+  id UUID,
+  name_ar TEXT,
+  similarity FLOAT
+)
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT 
+    id, 
+    name_ar,
+    similarity(name_ar, p_name) AS similarity
+  FROM institutions
+  WHERE name_ar % p_name
+    AND similarity(name_ar, p_name) > p_threshold
+  ORDER BY similarity DESC
+  LIMIT 5;
+$$;
+
+
+-- =========================================================
+-- FILE: 015_sync_logs.sql
+-- =========================================================
+-- ============================================================
+-- Migration 015: Sync Logs & Ingestion History
+-- ============================================================
+
+DROP TABLE IF EXISTS public.sync_logs CASCADE;
+
+CREATE TABLE public.sync_logs (
+  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_id               UUID REFERENCES public.legal_sources(id) ON DELETE SET NULL,
+  file_name               TEXT,
+  pdf_url                 TEXT,
+  status                  VARCHAR(20) DEFAULT 'processing',
+  issue_id                UUID REFERENCES public.issues(id) ON DELETE SET NULL,
+  documents_extracted     INTEGER DEFAULT 0,
+  articles_extracted      INTEGER DEFAULT 0,
+  persons_extracted       INTEGER DEFAULT 0,
+  institutions_extracted  INTEGER DEFAULT 0,
+  appointments_extracted  INTEGER DEFAULT 0,
+  relations_extracted     INTEGER DEFAULT 0,
+  citations_extracted     INTEGER DEFAULT 0,
+  ai_model_used           TEXT,
+  extraction_version      TEXT,
+  error_message           TEXT,
+  error_details           JSONB,
+  started_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at            TIMESTAMPTZ
+);
+
+CREATE INDEX idx_sync_logs_started ON public.sync_logs(started_at DESC);
+CREATE INDEX idx_sync_logs_status  ON public.sync_logs(status);
+
+ALTER TABLE public.sync_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "sync_logs_admin_all" 
+  ON public.sync_logs FOR ALL USING (is_admin());
+
+
+
+-- =========================================================
+-- FILE: 016_knowledge_graph.sql
+-- =========================================================
+-- Migration: 016_knowledge_graph.sql
+-- Description: Creates the core Knowledge Graph abstraction tables (Nodes and Edges)
+
+CREATE TABLE IF NOT EXISTS public.kg_nodes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_id UUID NOT NULL, -- The original relational ID (e.g., from documents or persons)
+    node_type TEXT NOT NULL, -- e.g., 'Document', 'Person', 'Institution', 'Topic'
+    label TEXT NOT NULL, -- The primary display name (e.g., "Law 2021-04", "Mohamed Ould...")
+    properties JSONB DEFAULT '{}'::jsonb, -- Any additional metadata (date, status, ministry)
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(source_id, node_type)
+);
+
+CREATE TABLE IF NOT EXISTS public.kg_edges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_node UUID NOT NULL REFERENCES public.kg_nodes(id) ON DELETE CASCADE,
+    target_node UUID NOT NULL REFERENCES public.kg_nodes(id) ON DELETE CASCADE,
+    relationship_type TEXT NOT NULL, -- e.g., 'AMENDS', 'REPEALS', 'APPOINTED_TO', 'SUPERVISES'
+    properties JSONB DEFAULT '{}'::jsonb, -- e.g., { "date": "2023-01-01", "decree_number": "2023-14" }
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(source_node, target_node, relationship_type)
+);
+
+-- Indexes for fast graph traversal
+CREATE INDEX IF NOT EXISTS idx_kg_nodes_type ON public.kg_nodes(node_type);
+CREATE INDEX IF NOT EXISTS idx_kg_edges_source ON public.kg_edges(source_node);
+CREATE INDEX IF NOT EXISTS idx_kg_edges_target ON public.kg_edges(target_node);
+CREATE INDEX IF NOT EXISTS idx_kg_edges_rel ON public.kg_edges(relationship_type);
+
+-- RLS
+ALTER TABLE public.kg_nodes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kg_edges ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read access on kg_nodes" ON public.kg_nodes FOR SELECT USING (true);
+CREATE POLICY "Allow public read access on kg_edges" ON public.kg_edges FOR SELECT USING (true);
+
+
+-- =========================================================
+-- FILE: 017_knowledge_layer.sql
+-- =========================================================
+-- Migration: 017_knowledge_layer.sql
+-- Description: Adds tables and security policies for the Knowledge Layer (Stage 16)
+
+-- ----------------------------------------------------------------
+-- TABLE: legal_events
+-- Structured events derived from documents/appointments/relations
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.legal_events (
+    id                  uuid default gen_random_uuid() primary key,
+    event_type          text not null,
+    category            text not null,
+    title_ar            text not null,
+    title_fr            text,
+    description_ar      text,
+    description_fr      text,
+    event_date          date,
+    event_date_end      date,
+    document_id         uuid references public.documents(id) on delete cascade,
+    article_id          uuid references public.articles(id) on delete set null,
+    person_id           uuid references public.persons(id) on delete set null,
+    institution_id      uuid references public.institutions(id) on delete set null,
+    issue_id            uuid references public.issues(id) on delete set null,
+    ai_generated        boolean default true,
+    confidence          real default 1.0,
+    knowledge_version   text,
+    created_at          timestamp with time zone default now() not null
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_type on public.legal_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_category on public.legal_events(category);
+CREATE INDEX IF NOT EXISTS idx_events_date on public.legal_events(event_date desc);
+CREATE INDEX IF NOT EXISTS idx_events_document_id on public.legal_events(document_id);
+CREATE INDEX IF NOT EXISTS idx_events_person_id on public.legal_events(person_id);
+CREATE INDEX IF NOT EXISTS idx_events_institution_id on public.legal_events(institution_id);
+
+-- ----------------------------------------------------------------
+-- TABLE: knowledge_cards
+-- AI-generated insight cards attached to any entity
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.knowledge_cards (
+    id                  uuid default gen_random_uuid() primary key,
+    entity_type         text not null,
+    entity_id           uuid not null,
+    card_type           text not null,
+    title_ar            text not null,
+    title_fr            text,
+    content_ar          text not null,
+    content_fr          text,
+    stats_json          jsonb,
+    ai_model_version    text,
+    knowledge_version   text,
+    created_at          timestamp with time zone default now() not null,
+    updated_at          timestamp with time zone default now() not null,
+    unique(entity_type, entity_id, card_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cards_entity on public.knowledge_cards(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_cards_type on public.knowledge_cards(card_type);
+
+-- ----------------------------------------------------------------
+-- TABLE: document_collections
+-- Auto-curated thematic document collections
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.document_collections (
+    id              uuid default gen_random_uuid() primary key,
+    code            text unique,
+    title_ar        text not null,
+    title_fr        text,
+    description_ar  text,
+    description_fr  text,
+    collection_type text not null,
+    filter_json     jsonb,
+    document_count  integer default 0,
+    color           text,
+    icon            text,
+    is_auto         boolean default true,
+    is_featured     boolean default false,
+    knowledge_version text,
+    created_at      timestamp with time zone default now() not null,
+    updated_at      timestamp with time zone default now() not null
+);
+
+CREATE TABLE IF NOT EXISTS public.collection_documents (
+    collection_id   uuid references public.document_collections(id) on delete cascade,
+    document_id     uuid references public.documents(id) on delete cascade,
+    order_index     integer default 0,
+    relevance_score real default 1.0,
+    primary key (collection_id, document_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_docs_collection on public.collection_documents(collection_id);
+CREATE INDEX IF NOT EXISTS idx_collection_docs_document on public.collection_documents(document_id);
+
+-- ----------------------------------------------------------------
+-- TABLE: semantic_links
+-- Hidden relationships detected via embedding similarity
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.semantic_links (
+    id              uuid default gen_random_uuid() primary key,
+    source_type     text not null,
+    source_id       uuid not null,
+    target_type     text not null,
+    target_id       uuid not null,
+    similarity_score real not null,
+    link_type       text default 'semantic',
+    explanation_ar  text,
+    knowledge_version text,
+    created_at      timestamp with time zone default now() not null,
+    unique(source_type, source_id, target_type, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sem_links_source on public.semantic_links(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_sem_links_score on public.semantic_links(similarity_score desc);
+
+-- ----------------------------------------------------------------
+-- TABLE: ai_narratives
+-- Human-readable historical narrative summaries
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.ai_narratives (
+    id              uuid default gen_random_uuid() primary key,
+    entity_type     text not null,
+    entity_id       uuid not null,
+    narrative_type  text not null,
+    narrative_ar    text not null,
+    narrative_fr    text,
+    period_start    date,
+    period_end      date,
+    ai_model_version text,
+    knowledge_version text,
+    created_at      timestamp with time zone default now() not null,
+    updated_at      timestamp with time zone default now() not null,
+    unique(entity_type, entity_id, narrative_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_narratives_entity on public.ai_narratives(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_narratives_type on public.ai_narratives(narrative_type);
+
+-- ----------------------------------------------------------------
+-- TABLE: knowledge_scores
+-- Importance score for every document (for search ranking)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.knowledge_scores (
+    document_id             uuid references public.documents(id) on delete cascade primary key,
+    citation_score          real default 0,
+    amendment_score         real default 0,
+    reference_score         real default 0,
+    entity_score            real default 0,
+    total_score             real default 0,
+    percentile_rank         real,
+    knowledge_version       text,
+    last_computed_at        timestamp with time zone default now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_scores_total on public.knowledge_scores(total_score desc);
+CREATE INDEX IF NOT EXISTS idx_knowledge_scores_percentile on public.knowledge_scores(percentile_rank desc);
+
+-- ----------------------------------------------------------------
+-- RLS for all knowledge tables
+-- ----------------------------------------------------------------
+ALTER TABLE public.legal_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.knowledge_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.document_collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collection_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.semantic_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_narratives ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.knowledge_scores ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+DECLARE 
+    t text; 
+BEGIN
+    FOREACH t IN ARRAY ARRAY[
+        'legal_events','knowledge_cards','document_collections',
+        'collection_documents','semantic_links','ai_narratives','knowledge_scores'
+    ] LOOP
+        EXECUTE format(
+            'CREATE POLICY "Allow public read access on %I" ON public.%I FOR SELECT USING (true);', t, t
+        );
+    END LOOP;
+END $$;
+
+
+-- =========================================================
+-- FILE: 018_sync_logs_realtime.sql
+-- =========================================================
+-- ============================================================
+-- Migration 018: Allow anon/authenticated to read their own
+-- sync_logs row so the upload page Realtime subscription works.
+-- ============================================================
+
+-- Allow anyone who knows the row UUID to SELECT it (read-only).
+-- The UUID acts as an unguessable token — no sensitive data exposed.
+DROP POLICY IF EXISTS "sync_logs_public_read" ON public.sync_logs;
+
+CREATE POLICY "sync_logs_public_read"
+  ON public.sync_logs
+  FOR SELECT
+  USING (true);
+
+-- Enable Realtime replication for this table
+-- (idempotent — safe to run again if already enabled)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.sync_logs;
+
+

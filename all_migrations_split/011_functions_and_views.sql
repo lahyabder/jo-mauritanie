@@ -338,8 +338,8 @@ CREATE VIEW v_recent_appointments AS
     p.full_name_ar AS person_full_name_ar,
     p.full_name_fr AS person_full_name_fr,
     p.photo_url,
-    inst.name_ar AS inst_name_ar,
-    inst.name_fr AS inst_name_fr,
+    inst.name_ar AS institution_name_ar,
+    inst.name_fr AS institution_name_fr,
     d.official_number AS document_official_number,
     i.issue_number,
     i.publication_date
@@ -366,6 +366,28 @@ CREATE OR REPLACE VIEW public.document_entities AS
   UNION ALL
   SELECT document_id, institution_id AS entity_id, 'institution' AS entity_type, role_ar AS role FROM public.document_institutions;
 
+-- ------------------------------------
+-- VIEW: timeline_events
+-- ------------------------------------
+CREATE OR REPLACE VIEW public.timeline_events AS
+  SELECT 
+    le.id,
+    le.event_date AS date,
+    le.title_ar AS title,
+    le.description_ar AS description,
+    le.event_type AS type,
+    COALESCE(p.full_name_ar, inst.name_ar) AS entity,
+    d.official_number AS reference_number,
+    CASE 
+      WHEN le.event_type = 'appointment' THEN 'bg-green-500'
+      WHEN le.event_type = 'law' THEN 'bg-blue-500'
+      WHEN le.event_type = 'repeal' THEN 'bg-red-500'
+      ELSE 'bg-gray-500'
+    END AS color
+  FROM public.legal_events le
+  LEFT JOIN public.persons p ON p.id = le.person_id
+  LEFT JOIN public.institutions inst ON inst.id = le.institution_id
+  LEFT JOIN public.documents d ON d.id = le.document_id;
 
 -- ============================================================
 -- Search Vector Triggers (replaces GENERATED ALWAYS AS)
@@ -447,5 +469,7 @@ DROP TRIGGER IF EXISTS trig_appointments_search_vector ON public.appointments;
 CREATE TRIGGER trig_appointments_search_vector
   BEFORE INSERT OR UPDATE ON public.appointments
   FOR EACH ROW EXECUTE FUNCTION update_appointments_search_vector();
+
+
 
 

@@ -161,3 +161,5 @@ CREATE TRIGGER set_updated_at_institutions
 CREATE TRIGGER set_updated_at_persons
   BEFORE UPDATE ON persons
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+

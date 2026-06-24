@@ -108,3 +108,5 @@ CREATE INDEX IF NOT EXISTS idx_appointment_history_person ON public.appointment_
 CREATE INDEX IF NOT EXISTS idx_appointment_history_inst   ON public.appointment_history(institution_id);
 CREATE INDEX IF NOT EXISTS idx_appointment_history_doc    ON public.appointment_history(instrument_document_id);
 
+
+

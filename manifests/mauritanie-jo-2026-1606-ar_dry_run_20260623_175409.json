@@ -1,0 +1,421 @@
+{
+  "issue": {
+    "pdf_url": "file:///Users/lahyabderrahmane/.gemini/antigravity-ide/scratch/jo-mauritanie/public/mauritanie-jo-2026-1606-ar.pdf",
+    "pdf_checksum": "ea38d1a7d74f710b4c2ccb4e4aef1e31f121a61db1d8477617f0355f25ad5295",
+    "issue_number": "1606",
+    "published_date": "2026-06-15",
+    "total_pages": 44
+  },
+  "pipeline": {
+    "pipeline_version": "3.0.0",
+    "extraction_version": "3.0.0",
+    "ai_model_version": "gemini-2.5-pro",
+    "prompt_version": "3.0.0",
+    "operator": "automated",
+    "dry_run": true,
+    "started_at": "2026-06-23T17:54:09.045700",
+    "completed_at": "2026-06-23T17:54:09.515523"
+  },
+  "extraction": {
+    "documents": 2,
+    "articles": 2,
+    "persons": 1,
+    "institutions": 1,
+    "appointments": 1,
+    "relations": 1,
+    "citations": 1,
+    "topics": 3
+  },
+  "deduplication": {
+    "documents_skipped": 0,
+    "persons_merged": 0,
+    "institutions_merged": 0
+  },
+  "quality_control": {
+    "passed": true,
+    "errors": 0,
+    "warnings": 0,
+    "error_details": [],
+    "warning_details": []
+  },
+  "stages": {
+    "completed": [
+      "02_download",
+      "03_ocr",
+      "04_segmentation",
+      "05_metadata",
+      "06_articles",
+      "07_ner",
+      "08_relations",
+      "09_citations",
+      "10_appointments",
+      "11_topics",
+      "12_deduplication",
+      "13_quality_control",
+      "14_db_commit_dry_run_skipped",
+      "16_knowledge_layer"
+    ],
+    "failed": []
+  },
+  "knowledge_layer": {
+    "events": [
+      {
+        "event_type": "law_created",
+        "category": "legal",
+        "title_ar": "قانون رقم 2026-015 يتعلق بمدونة المعادن والمحاجر في موريتانيا",
+        "description_ar": "قانون يحدد القواعد العامة المنظمة لقطاع الاستكشاف والاستغلال المعدني، ويؤكد على ملكية الدولة للثروات الباطنية.",
+        "event_date": "2026-06-15",
+        "document_id": null,
+        "issue_id": null,
+        "ai_generated": true,
+        "confidence": 0.95,
+        "knowledge_version": "1.0.0"
+      },
+      {
+        "event_type": "decree_issued",
+        "category": "legal",
+        "title_ar": "مرسوم رقم 2026-124 يقضي بتعيين المدير العام للمكتب الوطني للإحصاء",
+        "description_ar": "مرسوم رئاسي يعين السيد محمد ولد أحمد في منصب المدير العام للمكتب الوطني للإحصاء.",
+        "event_date": "2026-06-15",
+        "document_id": null,
+        "issue_id": null,
+        "ai_generated": true,
+        "confidence": 0.98,
+        "knowledge_version": "1.0.0"
+      },
+      {
+        "event_type": "appointment",
+        "category": "career",
+        "title_ar": "تعيين محمد ولد أحمد في المكتب الوطني للإحصاء",
+        "description_ar": "بموجب الوثيقة الرسمية الصادرة بتاريخ 2026-06-15",
+        "event_date": "2026-06-15",
+        "document_id": null,
+        "person_id": null,
+        "institution_id": null,
+        "issue_id": null,
+        "ai_generated": true,
+        "confidence": 0.98,
+        "knowledge_version": "1.0.0"
+      }
+    ],
+    "cards": [
+      {
+        "entity_type": "issue",
+        "entity_id": "__issue_id__",
+        "card_type": "issue_overview",
+        "title_ar": "نظرة عامة على الجريدة الرسمية رقم 1606",
+        "content_ar": "يحتوي هذا العدد رقم 1606 من الجريدة الرسمية على ما مجموعه 2 وثيقة تشريعية وتوجيهية مصنفة كالتالي: law: 1, decree: 1.",
+        "stats_json": {
+          "doc_counts": {
+            "law": 1,
+            "decree": 1
+          },
+          "total_docs": 2
+        },
+        "ai_model_version": "gemini-2.5-pro",
+        "knowledge_version": "1.0.0"
+      },
+      {
+        "entity_type": "issue",
+        "entity_id": "__issue_id__",
+        "narrative_type": "issue_overview",
+        "narrative_ar": "سرد افتراضي للعدد التشريعي في التشغيل التجريبي.",
+        "ai_model_version": "gemini-2.5-pro",
+        "knowledge_version": "1.0.0",
+        "is_narrative": true
+      }
+    ],
+    "collections": [
+      {
+        "collection_id": "c2",
+        "collection_code": "mining_laws",
+        "collection_title": "قوانين الطاقة والمعادن",
+        "document_id": "doc_1",
+        "relevance_score": 0.95
+      }
+    ],
+    "graph_nodes": [
+      {
+        "id": "__issue_id__",
+        "node_type": "Issue",
+        "label": "الجريدة الرسمية عدد 1606",
+        "properties": {
+          "issue_number": "1606",
+          "published_date": "2026-06-15"
+        }
+      },
+      {
+        "id": "doc_1",
+        "node_type": "Document",
+        "label": "قانون رقم 2026-015 يتعلق بمدونة المعادن والمحاجر في موريتانيا",
+        "properties": {
+          "type": "law",
+          "official_number": "2026-015",
+          "published_date": "2026-06-15"
+        }
+      },
+      {
+        "id": "doc_2",
+        "node_type": "Document",
+        "label": "مرسوم رقم 2026-124 يقضي بتعيين المدير العام للمكتب الوطني للإحصاء",
+        "properties": {
+          "type": "decree",
+          "official_number": "2026-124",
+          "published_date": "2026-06-15"
+        }
+      },
+      {
+        "id": "per_1",
+        "node_type": "Person",
+        "label": "محمد ولد أحمد",
+        "properties": {
+          "normalized_name": "محمد ولد احمد",
+          "gender": "male",
+          "current_position": "المدير العام للمكتب الوطني للإحصاء"
+        }
+      },
+      {
+        "id": "inst_1",
+        "node_type": "Institution",
+        "label": "المكتب الوطني للإحصاء",
+        "properties": {
+          "type": "enterprise",
+          "status": "active"
+        }
+      }
+    ],
+    "graph_edges": [
+      {
+        "source_node": "__issue_id__",
+        "target_node": "doc_1",
+        "relationship_type": "CONTAINS",
+        "properties": {}
+      },
+      {
+        "source_node": "__issue_id__",
+        "target_node": "doc_2",
+        "relationship_type": "CONTAINS",
+        "properties": {}
+      },
+      {
+        "source_node": "doc_2",
+        "target_node": "per_1",
+        "relationship_type": "APPOINTS",
+        "properties": {
+          "detected_sentence": "يعين السيد محمد ولد أحمد مديراً عاماً للمكتب الوطني للإحصاء.",
+          "explanation": "المرسوم رقم 2026-124 يعين السيد محمد ولد أحمد مديراً عاماً."
+        }
+      },
+      {
+        "source_node": "doc_2",
+        "target_node": "per_1",
+        "relationship_type": "APPOINTS",
+        "properties": {
+          "position": "المدير العام للمكتب الوطني للإحصاء",
+          "date": "2026-06-15"
+        }
+      },
+      {
+        "source_node": "per_1",
+        "target_node": "inst_1",
+        "relationship_type": "APPOINTED_TO",
+        "properties": {
+          "position": "المدير العام للمكتب الوطني للإحصاء",
+          "date": "2026-06-15",
+          "document_id": "doc_2"
+        }
+      }
+    ],
+    "scores": [
+      {
+        "document_id": "doc_1",
+        "document_title": "قانون رقم 2026-015 يتعلق بمدونة المعادن والمحاجر في موريتانيا",
+        "citation_score": 15.0,
+        "amendment_score": 0.0,
+        "reference_score": 0.0,
+        "entity_score": 0.0,
+        "total_score": 6.0,
+        "percentile_rank": 50.0,
+        "knowledge_version": "1.0.0",
+        "last_computed_at": "2026-06-23T17:54:09.515447"
+      },
+      {
+        "document_id": "doc_2",
+        "document_title": "مرسوم رقم 2026-124 يقضي بتعيين المدير العام للمكتب الوطني للإحصاء",
+        "citation_score": 0.0,
+        "amendment_score": 0.0,
+        "reference_score": 5.0,
+        "entity_score": 10.0,
+        "total_score": 1.75,
+        "percentile_rank": 50.0,
+        "knowledge_version": "1.0.0",
+        "last_computed_at": "2026-06-23T17:54:09.515481"
+      }
+    ]
+  },
+  "raw_extracted": {
+    "issue": {
+      "issue_number": "1606",
+      "published_date": "2026-06-15",
+      "year": 2026,
+      "month": 6,
+      "language": "ar"
+    },
+    "documents": [
+      {
+        "local_id": "doc_1",
+        "type": "law",
+        "official_number": "2026-015",
+        "title_ar": "قانون رقم 2026-015 يتعلق بمدونة المعادن والمحاجر في موريتانيا",
+        "title_fr": "Loi n° 2026-015 portant code des mines et des carrières",
+        "short_title_ar": "مدونة المعادن",
+        "page_start": 2,
+        "page_end": 14,
+        "published_date": "2026-06-15",
+        "language": "ar",
+        "original_text": "قانون رقم 2026-015 يتعلق بمدونة المعادن والمحاجر. المادة الأولى: ينظم هذا القانون شروط الاستكشاف والاستغلال للمعادن في الحوزة الترابية للجمهورية الإسلامية الموريتانية. المادة الثانية: تعتبر كافة الثروات المعدنية ملكا للدولة الموريتانية.",
+        "ai_summary_ar": "قانون يحدد القواعد العامة المنظمة لقطاع الاستكشاف والاستغلال المعدني، ويؤكد على ملكية الدولة للثروات الباطنية.",
+        "keywords": [
+          "معادن",
+          "محاجر",
+          "استغلال",
+          "استكشاف",
+          "رخصة"
+        ],
+        "status": "active",
+        "confidence_score": 0.95,
+        "document_hash": "04ff59169adc5c58364ce6d60edfefb2f2413438f9a4b0c7fedc85cdeef9b161"
+      },
+      {
+        "local_id": "doc_2",
+        "type": "decree",
+        "official_number": "2026-124",
+        "title_ar": "مرسوم رقم 2026-124 يقضي بتعيين المدير العام للمكتب الوطني للإحصاء",
+        "title_fr": "Décret n° 2026-124 portant nomination du Directeur Général de l'Office National de la Statistique",
+        "short_title_ar": "تعيين مدير مكتب الإحصاء",
+        "page_start": 15,
+        "page_end": 16,
+        "published_date": "2026-06-15",
+        "language": "ar",
+        "original_text": "مرسوم رقم 2026-124. رئيس الجمهورية، بناء على تقرير وزير الاقتصاد، يعين السيد محمد ولد أحمد مديراً عاماً للمكتب الوطني للإحصاء.",
+        "ai_summary_ar": "مرسوم رئاسي يعين السيد محمد ولد أحمد في منصب المدير العام للمكتب الوطني للإحصاء.",
+        "keywords": [
+          "تعيين",
+          "مدير",
+          "مكتب",
+          "إحصاء"
+        ],
+        "status": "active",
+        "confidence_score": 0.98,
+        "document_hash": "12dd253fccf007d268618c40ca83b53aca36ad23bfe04d2d544780e435f496d5"
+      }
+    ],
+    "articles": [
+      {
+        "local_id": "art_1",
+        "document_local_id": "doc_1",
+        "article_number": "المادة الأولى",
+        "article_title": "نطاق التطبيق",
+        "order_index": 1,
+        "page_number": 2,
+        "original_text": "ينظم هذا القانون شروط الاستكشاف والاستغلال للمعادن في الحوزة الترابية للجمهورية الإسلامية الموريتانية.",
+        "ai_summary": "تحديد النطاق الجغرافي والنوعي لتطبيق قانون المعادن الجديد.",
+        "keywords": [
+          "استكشاف",
+          "استغلال"
+        ],
+        "status": "active"
+      },
+      {
+        "local_id": "art_2",
+        "document_local_id": "doc_1",
+        "article_number": "المادة الثانية",
+        "article_title": "ملكية الثروات",
+        "order_index": 2,
+        "page_number": 2,
+        "original_text": "تعتبر كافة الثروات المعدنية ملكا للدولة الموريتانية.",
+        "ai_summary": "التأكيد على الملكية السيادية للدولة الموريتانية لكافة المعادن.",
+        "keywords": [
+          "ملكية",
+          "الدولة"
+        ],
+        "status": "active"
+      }
+    ],
+    "persons": [
+      {
+        "local_id": "per_1",
+        "full_name_ar": "محمد ولد أحمد",
+        "full_name_fr": "Mohamed Ould Ahmed",
+        "normalized_name": "محمد ولد احمد",
+        "gender": "male",
+        "current_position": "المدير العام للمكتب الوطني للإحصاء"
+      }
+    ],
+    "institutions": [
+      {
+        "local_id": "inst_1",
+        "official_name_ar": "المكتب الوطني للإحصاء",
+        "official_name_fr": "Office National de la Statistique",
+        "type": "enterprise",
+        "status": "active"
+      }
+    ],
+    "appointments": [
+      {
+        "person_local_id": "per_1",
+        "institution_local_id": "inst_1",
+        "document_local_id": "doc_2",
+        "position_title_ar": "المدير العام للمكتب الوطني للإحصاء",
+        "position_title_fr": "Directeur Général de l'Office National de la Statistique",
+        "appointment_type": "appointment",
+        "appointment_date": "2026-06-15",
+        "is_current": true,
+        "confidence": 0.98
+      }
+    ],
+    "relations": [
+      {
+        "source_local_id": "doc_2",
+        "source_type": "document",
+        "target_local_id": "per_1",
+        "target_type": "person",
+        "relation_type": "appoints",
+        "detected_sentence": "يعين السيد محمد ولد أحمد مديراً عاماً للمكتب الوطني للإحصاء.",
+        "ai_explanation": "المرسوم رقم 2026-124 يعين السيد محمد ولد أحمد مديراً عاماً.",
+        "confidence": 0.98
+      }
+    ],
+    "citations": [
+      {
+        "source_doc_local_id": "doc_2",
+        "source_art_local_id": null,
+        "target_doc_local_id": "doc_1",
+        "target_art_local_id": null,
+        "citation_type": "refers_to",
+        "citation_sentence": "بناء على القانون رقم 2026-015 المتعلق بمدونة المعادن.",
+        "ai_explanation": "المرسوم رقم 2026-124 يستند في ديباجته إلى قانون المعادن رقم 2026-015.",
+        "confidence": 0.92
+      }
+    ],
+    "topics": [
+      {
+        "entity_local_id": "doc_1",
+        "entity_type": "document",
+        "topic_codes": [
+          "mining",
+          "public_finance"
+        ],
+        "confidence": 0.95
+      },
+      {
+        "entity_local_id": "doc_2",
+        "entity_type": "document",
+        "topic_codes": [
+          "administration"
+        ],
+        "confidence": 0.98
+      }
+    ]
+  }
+}

@@ -215,3 +215,5 @@ CREATE TABLE notifications (
 
 CREATE INDEX idx_notifications_urgent ON notifications(is_urgent);
 CREATE INDEX idx_notifications_type   ON notifications USING GIN(notification_type_ar gin_trgm_ops);
+
+

@@ -69,3 +69,5 @@ CREATE TRIGGER set_updated_at_issues
 COMMENT ON TABLE  issues IS 'Official Gazette (Journal Officiel) issue records — one row per published issue number.';
 COMMENT ON COLUMN issues.issue_number IS 'The official sequential number of the gazette issue, unique and always positive.';
 COMMENT ON COLUMN issues.permanent_url IS 'Canonical URL for this issue, auto-generated from issue_number.';
+
+

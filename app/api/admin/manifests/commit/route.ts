@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
             full_name_fr: person.full_name_fr || null,
             gender: genderVal,
             current_role_title_ar: person.current_position || null,
-            current_role: 'other',
+            person_role: 'other',
             is_active: true
           })
           .select()

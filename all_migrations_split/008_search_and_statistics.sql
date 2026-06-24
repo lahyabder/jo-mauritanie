@@ -224,3 +224,5 @@ CREATE TABLE IF NOT EXISTS public.document_topics (
 
 CREATE INDEX IF NOT EXISTS idx_document_topics_doc ON public.document_topics(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_topics_top ON public.document_topics(topic_id);
+
+

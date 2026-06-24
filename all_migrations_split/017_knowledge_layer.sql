@@ -179,25 +179,4 @@ BEGIN
     END LOOP;
 END $$;
 
--- ------------------------------------
--- VIEW: timeline_events (depends on legal_events table defined above)
--- ------------------------------------
-CREATE OR REPLACE VIEW public.timeline_events AS
-  SELECT 
-    le.id,
-    le.event_date AS date,
-    le.title_ar AS title,
-    le.description_ar AS description,
-    le.event_type AS type,
-    COALESCE(p.full_name_ar, inst.name_ar) AS entity,
-    d.official_number AS reference_number,
-    CASE 
-      WHEN le.event_type = 'appointment' THEN 'bg-green-500'
-      WHEN le.event_type = 'law' THEN 'bg-blue-500'
-      WHEN le.event_type = 'repeal' THEN 'bg-red-500'
-      ELSE 'bg-gray-500'
-    END AS color
-  FROM public.legal_events le
-  LEFT JOIN public.persons p ON p.id = le.person_id
-  LEFT JOIN public.institutions inst ON inst.id = le.institution_id
-  LEFT JOIN public.documents d ON d.id = le.document_id;
+

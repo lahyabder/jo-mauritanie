@@ -277,3 +277,5 @@ $$;
 
 COMMENT ON TABLE upload_jobs IS 'Tracks each gazette PDF upload through the full extraction pipeline.';
 COMMENT ON TABLE extracted_documents IS 'Staging table for extracted documents before human review and publish. Never read by the public — only editors see this.';
+
+
