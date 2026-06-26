@@ -136,9 +136,9 @@ export default function DocumentCategoryEngine({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 gap-10">
         {/* Latest Documents List */}
-        <div className="lg:col-span-2">
+        <div>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900">{isAr ? 'أحدث الإصدارات' : 'Latest Releases'}</h2>
           </div>
@@ -173,29 +173,6 @@ export default function DocumentCategoryEngine({
               ))}
             </div>
           )}
-        </div>
-        
-        {/* Sidebar: Specialized Timeline & Relations */}
-        <div className="space-y-8">
-          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">{isAr ? 'التسلسل الزمني المتخصص' : 'Specialized Timeline'}</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              {isAr ? `تتبع تطور ${titleAr} عبر الزمن.` : `Track the evolution of ${titleFr} over time.`}
-            </p>
-            <Link href={`/${locale}/timeline?type=${documentType}`} className="text-indigo-600 text-sm font-medium hover:underline">
-              {isAr ? 'فتح المخطط الزمني' : 'Open Timeline'} &rarr;
-            </Link>
-          </div>
-          
-          <div className="bg-indigo-900 text-white rounded-2xl p-6 shadow-lg">
-            <h3 className="text-lg font-bold mb-2">{isAr ? 'شبكة العلاقات القانونية' : 'Legal Relations Graph'}</h3>
-            <p className="text-sm text-indigo-200 mb-6 leading-relaxed">
-              {isAr ? `استكشف التعديلات والإلغاءات المرتبطة بـ ${titleAr} بصرياً.` : `Visually explore amendments and repeals linked to ${titleFr}.`}
-            </p>
-            <Link href={`/${locale}/relations?focus=${documentType}`} className="block text-center bg-white text-indigo-900 px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-50 transition-colors">
-              {isAr ? 'عرض خريطة العلاقات' : 'View Relations Map'}
-            </Link>
-          </div>
         </div>
       </div>
     </div>

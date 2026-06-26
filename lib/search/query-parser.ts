@@ -39,7 +39,7 @@ export async function executeSemanticSearch(userQuery: string) {
   if (process.env.GEMINI_API_KEY) {
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: QueryParserSchema as any,
@@ -82,7 +82,7 @@ export async function executeSemanticSearch(userQuery: string) {
         return `Title: ${doc.title_ar}\nNumber: ${doc.official_number}\nContent: ${doc.content_ar.substring(0, 500)}`;
       }).join("\n\n---\n\n");
 
-      const answerModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const answerModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const answerPrompt = `
         Based on the following official gazette documents, answer the user's question.
         If the answer is not in the context, say "لا توجد معلومات كافية في الأرشيف للإجابة على هذا السؤال."

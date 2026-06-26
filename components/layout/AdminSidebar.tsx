@@ -14,11 +14,11 @@ export default function AdminSidebar() {
   const navItems = [
     { name: isAr ? 'لوحة التحكم' : 'Dashboard', href: `/${locale}/admin`, icon: BarChart3, exact: true },
     { name: isAr ? 'مراجعة واعتماد الأعداد' : 'Staging Review', href: `/${locale}/admin/review`, icon: ClipboardCheck, exact: false },
-    { name: isAr ? 'المستخدمين والصلاحيات' : 'Users & Roles', href: `#`, icon: Users, exact: false },
+    { name: isAr ? 'المستخدمين والصلاحيات' : 'Users & Roles', href: `/${locale}/admin/users`, icon: Users, exact: false },
     { name: isAr ? 'المزامنة والمهام' : 'Sync & AI Jobs', href: `/${locale}/admin/upload`, icon: UploadCloud, exact: false },
     { name: isAr ? 'سجلات النظام' : 'System Logs', href: `/${locale}/admin/sync-logs`, icon: DatabaseZap, exact: false },
-    { name: isAr ? 'صيانة قاعدة البيانات' : 'Database Maintenance', href: `#`, icon: Database, exact: false },
-    { name: isAr ? 'الإعدادات العامة' : 'Configuration', href: `#`, icon: Settings, exact: false },
+    { name: isAr ? 'صيانة قاعدة البيانات' : 'Database Maintenance', href: `/${locale}/admin/maintenance`, icon: Database, exact: false },
+    { name: isAr ? 'الإعدادات العامة' : 'Configuration', href: `/${locale}/admin/settings`, icon: Settings, exact: false },
   ];
 
   return (

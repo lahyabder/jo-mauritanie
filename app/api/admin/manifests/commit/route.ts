@@ -31,18 +31,7 @@ export async function POST(request: NextRequest) {
     }
     const sourceId = sourceData.id;
 
-    // Check if issue already exists by checksum
-    if (issueData.pdf_checksum) {
-      const { data: existingIssue } = await supabase
-        .from('issues')
-        .select('id')
-        .eq('pdf_checksum', issueData.pdf_checksum)
-        .maybeSingle();
-
-      if (existingIssue) {
-        return NextResponse.json({ error: 'This issue has already been successfully committed to the production database.' }, { status: 409 });
-      }
-    }
+    // Removed pdf_checksum uniqueness check to allow upsert and overwrites from admin review
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. INSERT ISSUE
@@ -51,17 +40,27 @@ export async function POST(request: NextRequest) {
     const year = publishedDate ? parseInt(publishedDate.split('-')[0], 10) : null;
     const month = publishedDate ? parseInt(publishedDate.split('-')[1], 10) : null;
 
+    const { data: existingIssueByNum } = await supabase
+      .from('issues')
+      .select('id')
+      .eq('issue_number', parseInt(issueData.issue_number, 10) || 0)
+      .maybeSingle();
+
+    if (existingIssueByNum) {
+      await supabase.from('documents').delete().eq('issue_id', existingIssueByNum.id);
+    }
+
     const { data: issueInsert, error: issueErr } = await supabase
       .from('issues')
-      .insert({
-        source_id: sourceId,
+      .upsert({
         issue_number: parseInt(issueData.issue_number, 10) || 0,
+        source_id: sourceId,
         publication_date: publishedDate || new Date().toISOString().split('T')[0],
         pdf_url: issueData.pdf_url || '',
         pdf_checksum: issueData.pdf_checksum || '',
         pdf_page_count: issueData.total_pages || 0,
         is_published: true
-      })
+      }, { onConflict: 'issue_number' })
       .select()
       .single();
 

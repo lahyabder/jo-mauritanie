@@ -124,7 +124,7 @@ export async function processUploadJob(jobId: string) {
           
           detected_type: aiMeta.type,
           classification_confidence: aiMeta.confidenceScore,
-          classification_model: 'gemini-1.5-flash',
+          classification_model: 'gemini-2.5-flash',
           classification_reasons: { reasoning: aiMeta.reasoning },
           
           detected_official_number: aiMeta.officialNumber || doc.boundary.detectedNumber,

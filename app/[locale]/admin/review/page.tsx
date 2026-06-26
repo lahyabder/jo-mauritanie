@@ -4,7 +4,8 @@ import { use, useState, useEffect } from 'react';
 import { 
   FileText, ShieldCheck, ClipboardCheck, Users, Link2, 
   Calendar, Layers, Save, CheckCircle, AlertTriangle, 
-  Trash2, Plus, Sparkles, ChevronRight, Check, RefreshCw
+  Trash2, Plus, Sparkles, ChevronRight, Check, RefreshCw,
+  Globe, EyeOff, Zap
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -23,6 +24,12 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
   const [saving, setSaving] = useState<boolean>(false);
   const [committing, setCommitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // ── DB Issues Manager state ──────────────────────────────────────────────
+  const [dbIssues, setDbIssues] = useState<any[]>([]);
+  const [dbIssuesLoading, setDbIssuesLoading] = useState(false);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [publishingAll, setPublishingAll] = useState(false);
 
   // Fetch all dry-run manifests
   const fetchManifests = async () => {
@@ -214,12 +221,79 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
         : "Are you sure you want to delete this staging file?"
     );
     if (!confirmDelete) return;
-    
-    // We can simulate deletion or implement a delete route if needed,
-    // let's just alert for now or reset select
     setSelectedFilename('');
     setManifestData(null);
   };
+
+  // ── DB Issues Manager functions ──────────────────────────────────────────
+  const fetchDbIssues = async () => {
+    setDbIssuesLoading(true);
+    try {
+      const res = await fetch('/api/admin/publish-issue');
+      const data = await res.json();
+      if (Array.isArray(data)) setDbIssues(data);
+    } catch (err) {
+      console.error('Error fetching DB issues:', err);
+    } finally {
+      setDbIssuesLoading(false);
+    }
+  };
+
+  const publishIssue = async (issueId: string) => {
+    setPublishingId(issueId);
+    try {
+      const res = await fetch('/api/admin/publish-issue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issue_id: issueId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('success', isAr
+          ? `✅ تم النشر: ${data.updated_documents} وثيقة منشورة`
+          : `✅ Published: ${data.updated_documents} document(s) now visible`);
+        fetchDbIssues();
+      } else {
+        showMsg('error', data.error || 'Publish failed');
+      }
+    } catch (err: any) {
+      showMsg('error', err.message);
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
+  const publishAllDrafts = async () => {
+    const confirmed = window.confirm(
+      isAr
+        ? 'سيتم نشر جميع الأعداد والوثائق غير المنشورة. هل أنت متأكد؟'
+        : 'This will publish ALL unpublished issues and documents. Proceed?'
+    );
+    if (!confirmed) return;
+    setPublishingAll(true);
+    try {
+      const res = await fetch('/api/admin/publish-issue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publish_all: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('success', isAr
+          ? `✅ تم نشر ${data.updated_issues} عدد و ${data.updated_documents} وثيقة`
+          : `✅ Published ${data.updated_issues} issue(s) and ${data.updated_documents} document(s)`);
+        fetchDbIssues();
+      } else {
+        showMsg('error', data.error || 'Bulk publish failed');
+      }
+    } catch (err: any) {
+      showMsg('error', err.message);
+    } finally {
+      setPublishingAll(false);
+    }
+  };
+
+  useEffect(() => { fetchDbIssues(); }, []);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8" dir={isAr ? 'rtl' : 'ltr'}>
@@ -276,6 +350,102 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
           {message.text}
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          DB ISSUES MANAGER — Publish existing records from the database
+          ══════════════════════════════════════════════════════════════════════ */}
+      <div className="mb-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+          <div className="flex items-center gap-2">
+            <Globe size={20} />
+            <h2 className="font-bold text-lg">
+              {isAr ? 'إدارة النشر — الأعداد في قاعدة البيانات' : 'Publication Manager — DB Issues'}
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchDbIssues}
+              className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+            >
+              <RefreshCw size={14} />
+            </button>
+            <button
+              onClick={publishAllDrafts}
+              disabled={publishingAll || dbIssues.every(i => i.is_published)}
+              className="flex items-center gap-1.5 bg-white text-indigo-700 font-bold px-3 py-1.5 rounded-lg text-sm hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+            >
+              <Zap size={14} />
+              {publishingAll
+                ? (isAr ? 'جاري النشر...' : 'Publishing...')
+                : (isAr ? 'نشر الكل' : 'Publish All')}
+            </button>
+          </div>
+        </div>
+
+        {dbIssuesLoading ? (
+          <div className="flex items-center justify-center py-8 text-slate-400">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mr-2" />
+            {isAr ? 'جاري التحميل...' : 'Loading...'}
+          </div>
+        ) : dbIssues.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">
+            <FileText size={36} className="mx-auto mb-2 opacity-30" />
+            <p>{isAr ? 'لا توجد أعداد في قاعدة البيانات بعد. ارفع ملف PDF أولاً.' : 'No issues in DB yet. Upload a PDF first.'}</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {/* Summary row */}
+            <div className="px-6 py-3 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-500">
+              <span>{isAr ? `${dbIssues.length} عدد في قاعدة البيانات` : `${dbIssues.length} issue(s) in database`}</span>
+              <span>
+                {dbIssues.filter(i => i.is_published).length} {isAr ? 'منشور' : 'published'} ·{' '}
+                {dbIssues.filter(i => !i.is_published).length} {isAr ? 'غير منشور' : 'unpublished'}
+              </span>
+            </div>
+
+            {dbIssues.map((issue) => (
+              <div key={issue.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${issue.is_published ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 text-sm">
+                      {isAr ? 'العدد' : 'Issue'} {issue.issue_number}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {issue.publication_date} · {issue.total_documents ?? 0} {isAr ? 'وثيقة' : 'doc(s)'}{' '}
+                      {issue.total_documents > 0 && (
+                        <span className={issue.published_documents === issue.total_documents ? 'text-emerald-600' : 'text-amber-600'}>
+                          ({issue.published_documents}/{issue.total_documents} {isAr ? 'منشور' : 'published'})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {issue.is_published && issue.published_documents === issue.total_documents ? (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
+                      <Check size={12} /> {isAr ? 'منشور' : 'Published'}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => publishIssue(issue.id)}
+                      disabled={publishingId === issue.id}
+                      className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-xs transition-colors disabled:opacity-50 shadow-sm"
+                    >
+                      <Globe size={13} />
+                      {publishingId === issue.id
+                        ? (isAr ? 'جاري النشر...' : 'Publishing...')
+                        : (isAr ? 'نشر للعموم' : 'Publish')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* ══════════════════════════════════════════════════════════════════════ */}
 
       {loading ? (
         <div className="flex justify-center items-center py-24 bg-white rounded-2xl border border-slate-200 shadow-sm">

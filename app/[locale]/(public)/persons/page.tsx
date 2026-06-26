@@ -12,6 +12,7 @@ export default function PersonsPage({ params }: { params: Promise<{ locale: stri
   const [persons, setPersons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export default function PersonsPage({ params }: { params: Promise<{ locale: stri
       setLoading(true);
       let req = supabase
         .from('persons')
-        .select('id, full_name_ar, full_name_fr, current_position_ar, current_position_fr, gender, is_active')
+        .select('id, full_name_ar, full_name_fr, current_role_title_ar, current_role_title_fr, gender, is_active')
         .order('full_name_ar', { ascending: true })
         .limit(100);
 
@@ -27,7 +28,13 @@ export default function PersonsPage({ params }: { params: Promise<{ locale: stri
         req = req.ilike('full_name_ar', `%${query.trim()}%`);
       }
 
-      const { data } = await req;
+      const { data, error } = await req;
+      if (error) {
+        console.error("Supabase fetch persons error:", error);
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg(null);
+      }
       if (data) setPersons(data);
       setLoading(false);
     }
@@ -68,6 +75,10 @@ export default function PersonsPage({ params }: { params: Promise<{ locale: stri
         <div className="flex justify-center p-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
         </div>
+      ) : errorMsg ? (
+        <div className="text-center p-16 text-red-500 border border-red-200 bg-red-50 rounded-2xl">
+          Error: {errorMsg}
+        </div>
       ) : persons.length === 0 ? (
         <div className="text-center p-16 text-gray-500 border border-dashed rounded-2xl bg-gray-50">
           {isAr ? 'لا توجد شخصيات حالياً.' : 'Aucune personnalité trouvée.'}
@@ -77,8 +88,8 @@ export default function PersonsPage({ params }: { params: Promise<{ locale: stri
           {persons.map((person) => {
             const name = isAr ? person.full_name_ar : (person.full_name_fr || person.full_name_ar);
             const position = isAr
-              ? (person.current_position_ar || '')
-              : (person.current_position_fr || person.current_position_ar || '');
+              ? (person.current_role_title_ar || '')
+              : (person.current_role_title_fr || person.current_role_title_ar || '');
             return (
               <Link
                 key={person.id}

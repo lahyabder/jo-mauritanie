@@ -103,9 +103,9 @@ export async function extractDocumentMetadata(text: string): Promise<AIExtractio
   }
 
   try {
-    // We use gemini-1.5-flash as it is fast and supports JSON schema
+    // We use gemini-2.5-flash as it is fast and supports JSON schema
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: ExtractionSchema as any,

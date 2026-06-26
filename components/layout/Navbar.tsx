@@ -27,8 +27,6 @@ export default function Navbar() {
     { name: isAr ? 'الإعلانات' : 'Announcements', href: `/${locale}/announcements`, icon: Megaphone },
     { name: isAr ? 'الشخصيات' : 'Persons', href: `/${locale}/persons`, icon: Users },
     { name: isAr ? 'المؤسسات' : 'Institutions', href: `/${locale}/institutions`, icon: Building },
-    { name: isAr ? 'التسلسل' : 'Timeline', href: `/${locale}/timeline`, icon: GitMerge },
-    { name: isAr ? 'العلاقات' : 'Relations', href: `/${locale}/relations`, icon: Network },
     { name: isAr ? 'البحث' : 'Search', href: `/${locale}/search`, icon: Search },
     { name: isAr ? 'الإحصائيات' : 'Statistics', href: `/${locale}/statistics`, icon: BarChart3 },
   ];

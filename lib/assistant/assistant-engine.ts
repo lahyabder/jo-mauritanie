@@ -23,7 +23,7 @@ export async function askLegalAssistant(query: string, chatHistory: any[] = []) 
 
   // 3. Prepare AI Request
   const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-pro", // Pro model for complex reasoning and comparison
+    model: "gemini-2.5-flash", // Flash model for complex reasoning and comparison
     systemInstruction: LEGAL_ASSISTANT_PROMPT
   });
 

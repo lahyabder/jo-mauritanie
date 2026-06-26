@@ -46,8 +46,6 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
     { titleAr: 'الإعلانات', titleFr: 'Annonces', href: `/${locale}/announcements`, icon: Megaphone, color: 'bg-cyan-600 text-white' },
     { titleAr: 'الشخصيات', titleFr: 'Personnalités', href: `/${locale}/persons`, icon: Users, color: 'bg-amber-600 text-white' },
     { titleAr: 'المؤسسات', titleFr: 'Institutions', href: `/${locale}/institutions`, icon: Building, color: 'bg-orange-600 text-white' },
-    { titleAr: 'التسلسل الزمني', titleFr: 'Chronologie', href: `/${locale}/timeline`, icon: Clock, color: 'bg-rose-600 text-white' },
-    { titleAr: 'العلاقات القانونية', titleFr: 'Relations Juridiques', href: `/${locale}/relations`, icon: GitMerge, color: 'bg-red-600 text-white' },
     { titleAr: 'الإحصائيات', titleFr: 'Statistiques', href: `/${locale}/statistics`, icon: BarChart3, color: 'bg-slate-700 text-white' },
     { titleAr: 'طبقة المعرفة', titleFr: 'Knowledge Layer', href: `/${locale}/knowledge`, icon: Brain, color: 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white' },
   ];

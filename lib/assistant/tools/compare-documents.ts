@@ -7,7 +7,7 @@ export async function compareDocuments(docId1: string, text1: string, docId2: st
     throw new Error("GEMINI_API_KEY not configured.");
   }
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const prompt = `
     You are an expert Legal Analyst. Compare the following two legal documents.

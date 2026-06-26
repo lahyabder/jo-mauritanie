@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { createAdminClient } from '@/utils/supabase/admin';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,21 +76,25 @@ export async function POST(req: NextRequest) {
 
     if (logError) {
       console.error('sync_logs insert error:', logError);
-      return NextResponse.json({ error: 'Failed to create job log' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to create job log',
+        debug: { code: logError.code, message: logError.message, details: logError.details, hint: logError.hint }
+      }, { status: 500 });
     }
 
     const jobId: string = logRow.id;
 
-    // ── Fire-and-forget: call /api/process ─────────────────────────────────
-    // We don't await so the upload response returns immediately.
+    // ── Kick off processing in background (kept alive by waitUntil) ───────────
     const baseUrl = req.nextUrl.origin;
-    fetch(`${baseUrl}/api/process`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId, pdfUrl }),
-    }).catch((err) => {
-      console.error(`[Upload] Failed to trigger process for job ${jobId}:`, err);
-    });
+    waitUntil(
+      fetch(`${baseUrl}/api/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, pdfUrl }),
+      }).catch((err) => {
+        console.error(`[Upload] Failed to trigger process for job ${jobId}:`, err);
+      })
+    );
 
     return NextResponse.json({
       success: true,

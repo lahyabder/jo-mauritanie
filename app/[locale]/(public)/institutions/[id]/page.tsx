@@ -49,7 +49,7 @@ export default async function InstitutionProfilePage({
 
   // Count documents that mention this institution
   const { count: docCount } = await supabase
-    .from('appointments')
+    .from('appointment_history')
     .select('id', { count: 'exact', head: true })
     .eq('institution_id', id);
 

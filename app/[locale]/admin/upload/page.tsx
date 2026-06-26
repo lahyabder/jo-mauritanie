@@ -88,20 +88,48 @@ function JobStatusViewer({ jobId, isAr = false, onReset }: { jobId: string; isAr
         </div>
       )}
 
-      <div className="space-y-6">
+      {/* Progress Bar */}
+      <div className="mb-8">
+        <div className="flex justify-between text-xs font-semibold text-gray-500 mb-2 px-1">
+          <span>{isAr ? 'التقدم' : 'Progression'}</span>
+          <span>{Math.min(100, Math.round((step / STEPS.length) * 100))}%</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+          <div 
+            className={`h-2.5 rounded-full transition-all duration-1000 ease-out ${isError ? 'bg-red-500' : 'bg-indigo-600'}`}
+            style={{ width: `${Math.min(100, (step / STEPS.length) * 100)}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-0 relative">
         {STEPS.map((s, idx) => {
           const stepNum = idx + 1;
           const done = step > stepNum;
           const active = step === stepNum;
+          const isLast = idx === STEPS.length - 1;
+          
           return (
-            <div key={idx} className={`flex items-center transition-opacity duration-500 ${stepNum <= step ? 'opacity-100' : 'opacity-35'}`}>
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center mr-4 ml-4 flex-shrink-0 font-bold transition-colors duration-300
-                ${done ? 'bg-green-100 text-green-600' : active ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-400'}`}>
+            <div key={idx} className={`relative flex items-start transition-opacity duration-500 pb-8 ${stepNum <= step ? 'opacity-100' : 'opacity-35'}`}>
+              {/* Vertical connector line */}
+              {!isLast && (
+                <div className={`absolute top-9 left-[33px] rtl:right-[33px] rtl:left-auto w-0.5 h-[calc(100%-36px)] transition-colors duration-500 ${done ? 'bg-green-200' : 'bg-gray-100'}`} />
+              )}
+              
+              <div className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center mx-4 flex-shrink-0 font-bold transition-all duration-500 border-2
+                ${done ? 'bg-green-100 text-green-600 border-green-200' : active && !isError ? 'bg-blue-100 text-blue-600 border-blue-200 animate-pulse' : 'bg-white text-gray-400 border-gray-200'}`}>
                 {done ? '✓' : active ? <span className="w-2.5 h-2.5 bg-blue-500 rounded-full" /> : stepNum}
               </div>
-              <div className="flex-1 text-start">
+              <div className="flex-1 text-start pt-1">
                 <h4 className="font-semibold text-gray-900">{isAr ? s.label_ar : s.label_fr}</h4>
-                <p className="text-sm text-gray-500 mt-0.5">{isAr ? s.desc_ar : s.desc_fr}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {isAr ? s.desc_ar : s.desc_fr}
+                  {active && stepNum === 2 && row?.error_details?.chunk_progress && (
+                    <span className="inline-block mx-2 text-indigo-600 font-bold rtl:mr-2">
+                      ({row.error_details.chunk_progress}%)
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
           );
