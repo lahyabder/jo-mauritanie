@@ -20,6 +20,7 @@ export default function AdminSidebar() {
     { name: isAr ? 'المزامنة والمهام' : 'Sync & AI Jobs', href: `/${locale}/admin/upload`, icon: UploadCloud, exact: false },
     { name: isAr ? 'سجلات النظام' : 'System Logs', href: `/${locale}/admin/sync-logs`, icon: DatabaseZap, exact: false },
     { name: isAr ? 'صيانة قاعدة البيانات' : 'Database Maintenance', href: `/${locale}/admin/maintenance`, icon: Database, exact: false },
+    { name: isAr ? 'إصلاح الأعداد' : 'Fix Issues', href: `/${locale}/admin/fix-issues`, icon: ShieldCheck, exact: false },
     { name: isAr ? 'الإعدادات العامة' : 'Configuration', href: `/${locale}/admin/settings`, icon: Settings, exact: false },
   ];
 
