@@ -20,10 +20,10 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
   useEffect(() => {
     async function fetchStats() {
       const [res1, res2, res3, res4] = await Promise.all([
-        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'decree'),
-        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'law'),
-        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'appointment'),
-        supabase.from('issues').select('id', { count: 'exact', head: true }),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'decree').eq('original_language', locale),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'law').eq('original_language', locale),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('type', 'appointment').eq('original_language', locale),
+        supabase.from('issues').select('id', { count: 'exact', head: true }).eq('language', locale),
       ]);
       setStats({
         decrees: res1.count || 0,
@@ -36,18 +36,16 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
   }, []);
 
   const categories = [
-    { titleAr: 'الأعداد', titleFr: 'Numéros', href: `/${locale}/issues`, icon: BookOpen, color: 'bg-gray-900 text-white' },
-    { titleAr: 'القوانين والأوامر', titleFr: 'Lois & Ordonnances', href: `/${locale}/laws`, icon: Scale, color: 'bg-blue-600 text-white' },
-    { titleAr: 'المراسيم', titleFr: 'Décrets', href: `/${locale}/decrees`, icon: FileSignature, color: 'bg-indigo-600 text-white' },
-    { titleAr: 'الأنظمة واللوائح', titleFr: 'Règlements', href: `/${locale}/regulations`, icon: BookMarked, color: 'bg-violet-600 text-white' },
-    { titleAr: 'المقررات', titleFr: 'Arrêtés', href: `/${locale}/decisions`, icon: Gavel, color: 'bg-purple-600 text-white' },
-    { titleAr: 'التعميمات', titleFr: 'Circulaires', href: `/${locale}/circulars`, icon: Send, color: 'bg-emerald-600 text-white' },
-    { titleAr: 'البلاغات', titleFr: 'Avis', href: `/${locale}/notifications`, icon: Bell, color: 'bg-teal-600 text-white' },
-    { titleAr: 'الإعلانات', titleFr: 'Annonces', href: `/${locale}/announcements`, icon: Megaphone, color: 'bg-cyan-600 text-white' },
-    { titleAr: 'الشخصيات', titleFr: 'Personnalités', href: `/${locale}/persons`, icon: Users, color: 'bg-amber-600 text-white' },
-    { titleAr: 'المؤسسات', titleFr: 'Institutions', href: `/${locale}/institutions`, icon: Building, color: 'bg-orange-600 text-white' },
-    { titleAr: 'الإحصائيات', titleFr: 'Statistiques', href: `/${locale}/statistics`, icon: BarChart3, color: 'bg-slate-700 text-white' },
-    { titleAr: 'طبقة المعرفة', titleFr: 'Knowledge Layer', href: `/${locale}/knowledge`, icon: Brain, color: 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white' },
+    { titleAr: 'الأعداد', titleFr: 'Numéros', href: `/${locale}/issues`, icon: BookOpen, color: 'bg-brand-green text-white' },
+    { titleAr: 'القوانين والأوامر', titleFr: 'Lois & Ordonnances', href: `/${locale}/laws`, icon: Scale, color: 'bg-brand-red text-white' },
+    { titleAr: 'المراسيم', titleFr: 'Décrets', href: `/${locale}/decrees`, icon: FileSignature, color: 'bg-brand-yellow text-gray-900' },
+    { titleAr: 'الأنظمة واللوائح', titleFr: 'Règlements', href: `/${locale}/regulations`, icon: BookMarked, color: 'bg-brand-green text-white' },
+    { titleAr: 'المقررات', titleFr: 'Arrêtés', href: `/${locale}/decisions`, icon: Gavel, color: 'bg-brand-red text-white' },
+    { titleAr: 'التعميمات', titleFr: 'Circulaires', href: `/${locale}/circulars`, icon: Send, color: 'bg-brand-yellow text-gray-900' },
+    { titleAr: 'البلاغات', titleFr: 'Avis', href: `/${locale}/notifications`, icon: Bell, color: 'bg-brand-green text-white' },
+    { titleAr: 'الإعلانات', titleFr: 'Annonces', href: `/${locale}/announcements`, icon: Megaphone, color: 'bg-brand-red text-white' },
+    { titleAr: 'الشخصيات', titleFr: 'Personnalités', href: `/${locale}/persons`, icon: Users, color: 'bg-brand-yellow text-gray-900' },
+    { titleAr: 'المؤسسات', titleFr: 'Institutions', href: `/${locale}/institutions`, icon: Building, color: 'bg-brand-green text-white' },
   ];
 
   return (
@@ -55,44 +53,36 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gray-900 text-white pt-24 pb-32">
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-[30%] -right-[10%] w-[70%] h-[70%] rounded-full bg-green-500/10 blur-3xl" />
-          <div className="absolute top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute -top-[30%] -right-[10%] w-[70%] h-[70%] rounded-full bg-brand-green/20 blur-3xl" />
+          <div className="absolute top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-brand-yellow/10 blur-3xl" />
+          <div className="absolute -bottom-[20%] left-[30%] w-[40%] h-[40%] rounded-full bg-brand-red/10 blur-3xl" />
         </div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-green-400 text-sm font-medium mb-8 border border-white/10 backdrop-blur-sm">
-            <Zap size={16} />
-            {isAr ? 'منصة الجريدة الرسمية الذكية' : 'Smart Official Gazette Platform'}
-          </div>
           
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight">
-            {isAr ? 'الجريدة الرسمية الموريتانية' : 'Mauritanian Official Gazette'}
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-l from-green-400 to-blue-500">
-              {isAr ? 'في عصر الذكاء الاصطناعي' : 'in the Age of AI'}
-            </span>
+          <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-8 leading-tight drop-shadow-lg">
+            {isAr ? 'الجريدة الرسمية الموريتانية' : 'Journal Officiel Mauritanien'}
           </h1>
-          
-          <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-300 mb-12 leading-relaxed">
+          <p className="text-xl md:text-2xl text-gray-100 max-w-3xl mx-auto leading-relaxed mb-12 drop-shadow">
             {isAr 
-              ? 'أول نسخة رقمية ذكية من الجريدة الرسمية. ابحث، تتبع، وحلل القوانين والمراسيم والتعيينات بشكل فوري وموثق.'
-              : 'The first smart digital edition of the Official Gazette. Search, track and analyze laws, decrees and appointments instantly.'}
+              ? 'نسخة رقمية ذكية من الجريدة الرسمية. ابحث، تتبع، القوانين والمراسيم والتعيينات بشكل مفصل' 
+              : 'Une édition numérique intelligente du Journal Officiel. Recherchez et suivez les lois, décrets et nominations en détail.'}
           </p>
           
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link 
               href={`/${locale}/search`}
-              className="px-8 py-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-green-500/25 flex items-center justify-center gap-2"
+              className="flex items-center justify-center gap-2 bg-brand-green hover:bg-brand-green/90 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl hover:-translate-y-1 w-full sm:w-auto"
             >
-              <Search size={20} />
-              {isAr ? 'ابدأ البحث الآن' : 'Start Searching Now'}
+              <Search className="w-5 h-5" />
+              {isAr ? 'ابدأ البحث الآن' : 'Commencer la recherche'}
             </Link>
             <Link 
               href={`/${locale}/issues`}
-              className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/10 rounded-xl font-bold text-lg transition-all backdrop-blur-md flex items-center justify-center gap-2"
+              className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl w-full sm:w-auto"
             >
-              <BookOpen size={20} />
-              {isAr ? 'تصفح الأعداد' : 'Browse Issues'}
+              <BookOpen className="w-5 h-5" />
+              {isAr ? 'تصفح الأعداد' : 'Parcourir les numéros'}
             </Link>
           </div>
         </div>
@@ -101,14 +91,14 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
       {/* Gazette Categories Grid */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
+          <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              {isAr ? 'أقسام الجريدة الرسمية' : 'Official Gazette Sections'}
+              {isAr ? 'أقسام الجريدة الرسمية' : 'Sections du Journal Officiel'}
             </h2>
-            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+            <p className="mt-4 text-xl text-gray-500 max-w-3xl mx-auto">
               {isAr 
-                ? 'كل قسم يمثل تصنيفاً رسمياً من تصنيفات الجريدة الرسمية، مع بحث وإحصائيات وتسلسل زمني خاص به.'
-                : 'Each section represents an official classification of the gazette, with its own search, statistics and timeline.'}
+              ? 'كل قسم يمثل تصنيفاً رسمياً من تصنيفات الجريدة الرسمية،' 
+              : 'Chaque section représente une catégorie officielle du Journal Officiel.'}
             </p>
           </div>
 
@@ -134,24 +124,24 @@ export default function LandingPage({ params }: { params: Promise<{ locale: stri
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 bg-green-50 border-t border-green-100">
+      <section className="py-20 bg-brand-green/5 border-t border-brand-green/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-12">{isAr ? 'أرقام من قاعدة البيانات' : 'Live Database Stats'}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div>
-              <div className="text-4xl font-extrabold text-green-600 mb-2">{stats.issues}</div>
+              <div className="text-4xl font-extrabold text-brand-green mb-2">{stats.issues}</div>
               <div className="text-sm text-gray-600 font-medium">{isAr ? 'عدد مؤرشف' : 'Archived Issues'}</div>
             </div>
             <div>
-              <div className="text-4xl font-extrabold text-green-600 mb-2">{stats.decrees}</div>
+              <div className="text-4xl font-extrabold text-brand-red mb-2">{stats.decrees}</div>
               <div className="text-sm text-gray-600 font-medium">{isAr ? 'مرسوم' : 'Decrees'}</div>
             </div>
             <div>
-              <div className="text-4xl font-extrabold text-green-600 mb-2">{stats.laws}</div>
+              <div className="text-4xl font-extrabold text-brand-yellow mb-2">{stats.laws}</div>
               <div className="text-sm text-gray-600 font-medium">{isAr ? 'قانون' : 'Laws'}</div>
             </div>
             <div>
-              <div className="text-4xl font-extrabold text-green-600 mb-2">{stats.appointments}</div>
+              <div className="text-4xl font-extrabold text-brand-green mb-2">{stats.appointments}</div>
               <div className="text-sm text-gray-600 font-medium">{isAr ? 'تعيين' : 'Appointments'}</div>
             </div>
           </div>

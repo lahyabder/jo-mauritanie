@@ -30,6 +30,7 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
   const [dbIssuesLoading, setDbIssuesLoading] = useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishingAll, setPublishingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Fetch all dry-run manifests
   const fetchManifests = async () => {
@@ -263,6 +264,35 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
     }
   };
 
+  const deleteIssue = async (issueId: string) => {
+    const confirmed = window.confirm(
+      isAr
+        ? 'هل أنت متأكد من حذف هذا العدد بشكل نهائي من قاعدة البيانات؟ سيتم حذف جميع الوثائق التابعة له ولن تتمكن من التراجع.'
+        : 'Are you sure you want to permanently delete this issue and all its documents from the database? This cannot be undone.'
+    );
+    if (!confirmed) return;
+    
+    setDeletingId(issueId);
+    try {
+      const res = await fetch('/api/admin/publish-issue', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issue_id: issueId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('success', isAr ? 'تم حذف العدد بنجاح' : 'Issue deleted successfully');
+        fetchDbIssues();
+      } else {
+        showMsg('error', data.error || 'Delete failed');
+      }
+    } catch (err: any) {
+      showMsg('error', err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const publishAllDrafts = async () => {
     const confirmed = window.confirm(
       isAr
@@ -408,8 +438,13 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${issue.is_published ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-800 text-sm">
+                    <p className="font-bold text-slate-800 text-sm flex items-center gap-2">
                       {isAr ? 'العدد' : 'Issue'} {issue.issue_number}
+                      {issue.language && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase tracking-wide ${issue.language === 'fr' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                          {issue.language === 'fr' ? (isAr ? 'فرنسي' : 'FR') : (isAr ? 'عربي' : 'AR')}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-400">
                       {issue.publication_date} · {issue.total_documents ?? 0} {isAr ? 'وثيقة' : 'doc(s)'}{' '}
@@ -430,7 +465,7 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
                   ) : (
                     <button
                       onClick={() => publishIssue(issue.id)}
-                      disabled={publishingId === issue.id}
+                      disabled={publishingId === issue.id || deletingId === issue.id}
                       className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg text-xs transition-colors disabled:opacity-50 shadow-sm"
                     >
                       <Globe size={13} />
@@ -439,6 +474,15 @@ export default function ReviewDashboard({ params }: { params: Promise<{ locale: 
                         : (isAr ? 'نشر للعموم' : 'Publish')}
                     </button>
                   )}
+                  <button
+                    onClick={() => deleteIssue(issue.id)}
+                    disabled={deletingId === issue.id || publishingId === issue.id}
+                    className="flex items-center gap-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 font-semibold px-3 py-2 rounded-lg text-xs transition-colors border border-rose-200 disabled:opacity-50"
+                    title={isAr ? 'حذف العدد نهائياً' : 'Delete Issue Permanently'}
+                  >
+                    <Trash2 size={14} />
+                    {deletingId === issue.id ? (isAr ? 'جاري الحذف...' : 'Deleting...') : (isAr ? 'حذف' : 'Delete')}
+                  </button>
                 </div>
               </div>
             ))}

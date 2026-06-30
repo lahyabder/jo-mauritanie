@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { UploadCloud, File, AlertCircle, Loader2, Link2, FileText } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { UploadCloud, File, AlertCircle, Loader2, Link2, FileText, Hash } from 'lucide-react';
 
 type Mode = 'file' | 'url';
 
@@ -10,8 +10,25 @@ export default function UploadDropzone({ onUploadSuccess, isAr = false }: { onUp
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [pdfUrl, setPdfUrl] = useState('');
+  const [language, setLanguage] = useState<'ar' | 'fr'>('ar');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [issueNumber, setIssueNumber] = useState<string>('');
+  const [showWarning, setShowWarning] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+
+  // Attempt to extract issue number from filename or URL
+  useEffect(() => {
+    const textToSearch = mode === 'file' && file ? file.name : mode === 'url' ? pdfUrl : '';
+    if (textToSearch && !issueNumber) {
+      const textWithoutYears = textToSearch.replace(/\b(19|20)\d{2}\b/g, '');
+      const match = textWithoutYears.match(/(?:jo[_\-]?|number[_\-]?|numero[_\-]?|عدد[_\-]?)?(\d{3,5})/i);
+      if (match && match[1]) {
+        setIssueNumber(match[1]);
+      }
+    }
+  }, [file, pdfUrl, mode]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
@@ -32,12 +49,38 @@ export default function UploadDropzone({ onUploadSuccess, isAr = false }: { onUp
 
   const canSubmit = mode === 'file' ? !!file : pdfUrl.trim().toLowerCase().endsWith('.pdf');
 
-  const handleUpload = async () => {
+  const handleUpload = async (forceOverwrite = false) => {
     if (!canSubmit) return;
+    
+    // Check if issue exists
+    if (!forceOverwrite && issueNumber) {
+      setIsChecking(true);
+      setError(null);
+      try {
+        const checkRes = await fetch(`/api/check-issue?issueNumber=${issueNumber}`);
+        const checkData = await checkRes.json();
+        setIsChecking(false);
+        if (checkData.exists) {
+          setShowWarning(true);
+          return;
+        }
+      } catch (err) {
+        setIsChecking(false);
+        console.error('Failed to check issue:', err);
+        // Continue anyway if check fails
+      }
+    }
+
+    setShowWarning(false);
     setUploading(true);
     setError(null);
 
     const formData = new FormData();
+    formData.append('language', language);
+    if (issueNumber) {
+      formData.append('issueNumber', issueNumber);
+    }
+
     if (mode === 'file' && file) {
       formData.append('file', file);
     } else {
@@ -138,24 +181,113 @@ export default function UploadDropzone({ onUploadSuccess, isAr = false }: { onUp
         </div>
       )}
 
-      {/* Submit Button */}
-      <button
-        onClick={handleUpload}
-        disabled={uploading || !canSubmit}
-        className="w-full flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold shadow-sm"
-      >
-        {uploading ? (
-          <><Loader2 className="animate-spin" size={20} /> {isAr ? 'جاري الرفع والمعالجة…' : 'Envoi et traitement…'}</>
-        ) : (
-          <><UploadCloud size={20} /> {isAr ? 'بدء المعالجة' : 'Lancer le traitement'}</>
-        )}
-      </button>
-
-      {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-xl flex items-start gap-3 border border-red-100">
-          <AlertCircle className="flex-shrink-0 mt-0.5" size={18} />
-          <p className="text-sm">{error}</p>
+      {/* Language Selector */}
+      {/* Language and Issue Selector */}
+      {(file || mode === 'url') && !showWarning && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {isAr ? 'لغة العدد (الأساسية)' : 'Langue (principale)'}
+              </label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'ar' | 'fr')}
+                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              >
+                <option value="ar">{isAr ? 'العربية' : 'Arabe'}</option>
+                <option value="fr">{isAr ? 'الفرنسية' : 'Français'}</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {isAr ? 'رقم العدد' : 'Numéro du journal'}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 rtl:right-0 ltr:left-0 rtl:pr-3 ltr:pl-3 flex items-center pointer-events-none">
+                  <Hash className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={issueNumber}
+                  onChange={(e) => setIssueNumber(e.target.value)}
+                  placeholder={isAr ? 'مثال: 1605' : 'Ex: 1605'}
+                  className="w-full rtl:pl-3 rtl:pr-10 ltr:pl-10 ltr:pr-3 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {isAr ? 'اختياري: سيتم استخراجه تلقائياً إذا تُرك فارغاً' : 'Optionnel: sera extrait automatiquement si vide'}
+              </p>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Warning Alert */}
+      {showWarning && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <AlertCircle className="w-8 h-8 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-amber-800">
+                {isAr ? 'تنبيه: العدد موجود مسبقاً' : 'Attention: Numéro déjà existant'}
+              </h3>
+              <p className="mt-2 text-amber-700 text-sm leading-relaxed">
+                {isAr 
+                  ? `العدد رقم ${issueNumber} موجود بالفعل في قاعدة البيانات. المتابعة ستؤدي إلى حذف البيانات القديمة (القوانين، التعيينات، الخ) واستخراجها من جديد. هل أنت متأكد أنك تريد المتابعة؟` 
+                  : `Le numéro ${issueNumber} existe déjà dans la base de données. Continuer remplacera les données existantes. Êtes-vous sûr de vouloir continuer ?`}
+              </p>
+              <div className="mt-5 flex gap-3">
+                <button
+                  onClick={() => handleUpload(true)}
+                  disabled={uploading}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
+                >
+                  {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isAr ? 'نعم، أعد استخراج البيانات' : 'Oui, ré-extraire les données'}
+                </button>
+                <button
+                  onClick={() => setShowWarning(false)}
+                  disabled={uploading}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg font-medium transition-colors"
+                >
+                  {isAr ? 'إلغاء الأمر' : 'Annuler'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit/Error Area */}
+      {error && (
+        <div className="p-3 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm flex items-center gap-2">
+          <AlertCircle size={16} />
+          {error}
+        </div>
+      )}
+
+      {!showWarning && (
+        <button
+          onClick={() => handleUpload(false)}
+          disabled={!canSubmit || uploading || isChecking}
+          className={`w-full py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
+            canSubmit && !uploading && !isChecking
+              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          {uploading || isChecking ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>{isAr ? 'جاري التحضير...' : 'Préparation...'}</span>
+            </>
+          ) : (
+            <span>{isAr ? 'بدء التحليل والاستخراج' : 'Démarrer l\'analyse'}</span>
+          )}
+        </button>
       )}
     </div>
   );

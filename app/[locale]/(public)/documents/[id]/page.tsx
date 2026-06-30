@@ -1,8 +1,9 @@
 import { createClient } from '@/utils/supabase/server';
 import { notFound } from 'next/navigation';
-import { FileText, Calendar, BookOpen, Clock, Tag } from 'lucide-react';
+import { FileText, Calendar, BookOpen, Clock, Tag, ArrowLeft, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Breadcrumbs from '@/components/ui/Breadcrumbs';
+import PdfViewerToggle from '@/components/gazette/PdfViewerToggle';
 
 export default async function DocumentDetailsPage({ 
   params 
@@ -19,13 +20,26 @@ export default async function DocumentDetailsPage({
     .eq('id', id)
     .single();
 
-  if (!document) {
+  if (!document || (document.issues && document.issues.language !== locale)) {
     notFound();
   }
 
   const title = isAr ? document.title_ar : (document.title_fr || document.title_ar);
   const summary = isAr ? (document.ai_summary_ar || document.summary_ar) : (document.summary_fr || document.summary_ar);
   const content = isAr ? document.content_ar : (document.content_fr || document.content_ar);
+
+  const typeMap: Record<string, { ar: string, fr: string }> = {
+    'decree': { ar: 'مرسوم', fr: 'Décret' },
+    'law': { ar: 'قانون', fr: 'Loi' },
+    'order': { ar: 'مقرر', fr: 'Arrêté' },
+    'ordinance': { ar: 'أمر قانوني', fr: 'Ordonnance' },
+    'circular': { ar: 'تعميم', fr: 'Circulaire' },
+    'decision': { ar: 'قرار', fr: 'Décision' },
+    'notice': { ar: 'إعلان', fr: 'Avis' },
+    'regulation': { ar: 'نظام', fr: 'Règlement' },
+  };
+  const rawType = (document.type || 'document').toLowerCase();
+  const translatedType = typeMap[rawType] ? (isAr ? typeMap[rawType].ar : typeMap[rawType].fr) : document.type;
 
   return (
     <div className="max-w-5xl mx-auto py-10 px-4 sm:px-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -36,73 +50,88 @@ export default async function DocumentDetailsPage({
         ]} 
       />
       
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-        <div className="bg-indigo-50 px-8 py-6 border-b border-indigo-100">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="bg-white text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 uppercase tracking-wide">
-              {document.type}
+      <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-gray-100/50 overflow-hidden mb-8">
+        {/* Decorative blur elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-slate-100/50 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none"></div>
+
+        <div className="relative z-10 px-8 sm:px-12 py-10 border-b border-gray-100">
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+            <span className="bg-brand-green/10 text-brand-green px-4 py-1.5 rounded-full text-sm font-bold border border-brand-green/20 tracking-wide flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              {translatedType}
             </span>
             {document.official_number && (
-              <span className="bg-white text-gray-700 px-3 py-1 rounded-full text-xs font-medium border border-gray-200">
+              <span className="bg-slate-50 text-slate-700 px-4 py-1.5 rounded-full text-sm font-medium border border-slate-200">
                 {document.official_number}
               </span>
             )}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 leading-snug">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-800 leading-[1.3]">
             {title}
           </h1>
         </div>
         
-        <div className="px-8 py-6 flex flex-wrap gap-6 text-sm text-gray-600 bg-gray-50 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-gray-400" />
+        <div className="relative z-10 px-8 sm:px-12 py-6 flex flex-wrap gap-x-12 gap-y-6 text-sm text-slate-600 bg-slate-50/50 border-b border-slate-100">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-100">
+              <Calendar className="w-5 h-5 text-brand-green" />
+            </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'تاريخ الوثيقة' : 'Document Date'}</p>
-              <p className="font-semibold text-gray-900">{document.document_date || 'N/A'}</p>
+              <p className="text-xs text-slate-500 mb-0.5">{isAr ? 'تاريخ الوثيقة' : 'Date du document'}</p>
+              <p className="font-bold text-slate-800">{document.document_date || 'N/A'}</p>
             </div>
           </div>
           
           {document.issues && (
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-100">
+                <BookOpen className="w-5 h-5 text-brand-green" />
+              </div>
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'الجريدة الرسمية' : 'Official Gazette'}</p>
-                <Link href={`/${locale}/documents?issue=${document.issues.id}`} className="font-semibold text-indigo-600 hover:underline">
-                  {isAr ? 'العدد' : 'Issue'} {document.issues.issue_number}
+                <p className="text-xs text-slate-500 mb-0.5">{isAr ? 'الجريدة الرسمية' : 'Journal Officiel'}</p>
+                <Link href={`/${locale}/documents?issue=${document.issues.id}`} className="font-bold text-brand-green hover:underline">
+                  {isAr ? 'العدد' : 'Numéro'} {document.issues.issue_number}
                 </Link>
               </div>
             </div>
           )}
           
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-gray-400" />
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-100">
+              <Clock className="w-5 h-5 text-brand-green" />
+            </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'تاريخ النشر' : 'Publish Date'}</p>
-              <p className="font-semibold text-gray-900">{document.created_at ? new Date(document.created_at).toLocaleDateString() : 'N/A'}</p>
+              <p className="text-xs text-slate-500 mb-0.5">{isAr ? 'تاريخ النشر' : 'Date de publication'}</p>
+              <p className="font-bold text-slate-800">{document.created_at ? new Date(document.created_at).toLocaleDateString() : 'N/A'}</p>
             </div>
           </div>
         </div>
         
-        <div className="p-8 space-y-8">
+        <div className="relative z-10 p-8 sm:px-12 sm:py-10 space-y-10">
           {summary && (
-            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6">
-              <h3 className="text-blue-900 font-bold mb-3 flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                {isAr ? 'الملخص' : 'Summary'}
+            <div className="bg-brand-green/5 border border-brand-green/10 rounded-2xl p-6 sm:p-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-2 h-full bg-brand-green"></div>
+              <h3 className="text-brand-green font-bold text-lg mb-4 flex items-center gap-2">
+                <Tag className="w-5 h-5" />
+                {isAr ? 'الملخص' : 'Résumé'}
               </h3>
-              <p className="text-blue-800 leading-relaxed">
+              <p className="text-slate-800 leading-relaxed text-lg font-medium">
                 {summary}
               </p>
             </div>
           )}
           
           <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-4">{isAr ? 'النص الكامل' : 'Full Text'}</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <FileText className="w-6 h-6 text-brand-green" />
+              {isAr ? 'النص الكامل' : 'Texte Intégral'}
+            </h3>
             {content ? (
-              <div className="prose prose-indigo max-w-none text-gray-700 leading-loose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br/>') }} />
+              <div className="prose prose-slate prose-lg max-w-none text-slate-700 leading-loose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br/>') }} />
             ) : (
-              <p className="text-gray-500 italic bg-gray-50 p-6 rounded-xl border border-dashed border-gray-200 text-center">
-                {isAr ? 'النص الكامل غير متوفر لهذه الوثيقة.' : 'Full text is not available for this document.'}
+              <p className="text-slate-500 italic bg-slate-50 p-10 rounded-2xl border border-dashed border-slate-200 text-center text-lg">
+                {isAr ? 'النص الكامل غير متوفر لهذه الوثيقة.' : 'Le texte intégral n\'est pas disponible pour ce document.'}
               </p>
             )}
           </div>
@@ -110,12 +139,7 @@ export default async function DocumentDetailsPage({
       </div>
       
       {document.issues?.pdf_url && (
-         <div className="flex justify-center mt-8">
-           <Link href={document.issues.pdf_url} target="_blank" className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-8 rounded-xl shadow-sm transition-colors flex items-center gap-2">
-             <FileText className="w-5 h-5" />
-             {isAr ? 'عرض الجريدة الرسمية (PDF)' : 'View Official Gazette (PDF)'}
-           </Link>
-         </div>
+         <PdfViewerToggle pdfUrl={document.issues.pdf_url} isAr={isAr} pageStart={document.pdf_page_start} />
       )}
     </div>
   );

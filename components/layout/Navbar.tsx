@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { 
   Search, Compass, BookOpen, GitMerge, LayoutDashboard, 
   Users, Building, Network, BarChart3, Scale, FileSignature, 
-  BookMarked, Gavel, Send, Bell, Megaphone 
+  BookMarked, Gavel, Send, Bell, Megaphone, Globe
 } from 'lucide-react';
 import { useLocale } from 'next-intl';
 
@@ -14,21 +15,27 @@ export default function Navbar() {
   const locale = useLocale();
 
   const isAr = locale === 'ar';
+  const nextLocale = isAr ? 'fr' : 'ar';
+  
+  // Replace the current locale in the path with the new locale
+  // Handle edge case where pathname is exactly /locale
+  const switchUrl = pathname === `/${locale}` || pathname === `/${locale}/` 
+    ? `/${nextLocale}` 
+    : pathname.replace(`/${locale}/`, `/${nextLocale}/`);
   
   const navItems = [
-    { name: isAr ? 'الرئيسية' : 'Home', href: `/${locale}`, icon: Compass },
-    { name: isAr ? 'الأعداد' : 'Issues', href: `/${locale}/issues`, icon: BookOpen },
-    { name: isAr ? 'القوانين' : 'Laws', href: `/${locale}/laws`, icon: Scale },
-    { name: isAr ? 'المراسيم' : 'Decrees', href: `/${locale}/decrees`, icon: FileSignature },
-    { name: isAr ? 'الأنظمة' : 'Regulations', href: `/${locale}/regulations`, icon: BookMarked },
-    { name: isAr ? 'المقررات' : 'Decisions', href: `/${locale}/decisions`, icon: Gavel },
-    { name: isAr ? 'التعميمات' : 'Circulars', href: `/${locale}/circulars`, icon: Send },
-    { name: isAr ? 'البلاغات' : 'Notifications', href: `/${locale}/notifications`, icon: Bell },
-    { name: isAr ? 'الإعلانات' : 'Announcements', href: `/${locale}/announcements`, icon: Megaphone },
-    { name: isAr ? 'الشخصيات' : 'Persons', href: `/${locale}/persons`, icon: Users },
+    { name: isAr ? 'الرئيسية' : 'Accueil', href: `/${locale}`, icon: Compass },
+    { name: isAr ? 'الأعداد' : 'Numéros', href: `/${locale}/issues`, icon: BookOpen },
+    { name: isAr ? 'القوانين' : 'Lois', href: `/${locale}/laws`, icon: Scale },
+    { name: isAr ? 'المراسيم' : 'Décrets', href: `/${locale}/decrees`, icon: FileSignature },
+    { name: isAr ? 'الأنظمة' : 'Règlements', href: `/${locale}/regulations`, icon: BookMarked },
+    { name: isAr ? 'المقررات' : 'Arrêtés', href: `/${locale}/decisions`, icon: Gavel },
+    { name: isAr ? 'التعميمات' : 'Circulaires', href: `/${locale}/circulars`, icon: Send },
+    { name: isAr ? 'البلاغات' : 'Communiqués', href: `/${locale}/notifications`, icon: Bell },
+    { name: isAr ? 'الإعلانات' : 'Annonces', href: `/${locale}/announcements`, icon: Megaphone },
+    { name: isAr ? 'الشخصيات' : 'Personnalités', href: `/${locale}/persons`, icon: Users },
     { name: isAr ? 'المؤسسات' : 'Institutions', href: `/${locale}/institutions`, icon: Building },
-    { name: isAr ? 'البحث' : 'Search', href: `/${locale}/search`, icon: Search },
-    { name: isAr ? 'الإحصائيات' : 'Statistics', href: `/${locale}/statistics`, icon: BarChart3 },
+    { name: isAr ? 'البحث' : 'Recherche', href: `/${locale}/search`, icon: Search },
   ];
 
   return (
@@ -39,11 +46,11 @@ export default function Navbar() {
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <Link href={`/${locale}`} className="flex items-center gap-2 group">
-              <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-xl group-hover:bg-green-700 transition-colors">
-                ج
+              <div className="relative w-10 h-10 overflow-hidden rounded-full border-2 border-brand-green group-hover:border-brand-green/80 transition-colors shadow-sm">
+                <Image src="/logo.png" alt="Logo" fill className="object-cover" />
               </div>
               <span className="font-bold text-xl text-gray-900 tracking-tight hidden lg:block">
-                الجريدة الرسمية
+                {isAr ? 'الجريدة الرسمية' : 'Journal officiel'}
               </span>
             </Link>
           </div>
@@ -61,11 +68,10 @@ export default function Navbar() {
                     href={item.href}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive 
-                        ? 'bg-green-50 text-green-700' 
+                        ? 'bg-brand-green/10 text-brand-green' 
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     }`}
                   >
-                    <Icon size={16} />
                     {item.name}
                   </Link>
                 );
@@ -73,15 +79,19 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Admin Button */}
-          <div className="flex-shrink-0 flex items-center">
+          {/* Right Actions */}
+          <div className="flex-shrink-0 flex items-center gap-3">
+            {/* Language Switcher */}
             <Link
-              href={`/${locale}/admin`}
-              className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm whitespace-nowrap"
+              href={switchUrl}
+              className="flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              title={isAr ? 'Passer en Français' : 'التبديل للعربية'}
             >
-              <LayoutDashboard size={16} />
-              <span className="hidden sm:inline">{isAr ? 'الإدارة' : 'Admin'}</span>
+              <Globe size={18} />
+              <span className="sr-only">{isAr ? 'FR' : 'AR'}</span>
             </Link>
+
+
           </div>
           
         </div>

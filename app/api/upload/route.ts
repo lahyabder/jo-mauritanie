@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const pdfUrlInput = formData.get('pdfUrl') as string | null;
+    const language = formData.get('language') as string || 'ar';
+    const issueNumber = formData.get('issueNumber') as string | null;
 
     // Validate inputs
     if (!file && !pdfUrlInput) {
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
       fetch(`${baseUrl}/api/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, pdfUrl }),
+        body: JSON.stringify({ jobId, pdfUrl, language, issueNumber }),
       }).catch((err) => {
         console.error(`[Upload] Failed to trigger process for job ${jobId}:`, err);
       })

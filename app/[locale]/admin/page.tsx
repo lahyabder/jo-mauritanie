@@ -32,17 +32,17 @@ export default function AdminDashboard({ params }: { params: Promise<{ locale: s
   }, []);
 
   const stats = [
-    { title: isAr ? 'المراسيم المستخرجة' : 'Extracted Decrees', value: dataStats.decrees.toString(), trend: '+0%', icon: FileText, color: 'bg-blue-100 text-blue-600' },
-    { title: isAr ? 'الشخصيات المسجلة' : 'Registered Persons', value: dataStats.persons.toString(), trend: '+0%', icon: Users, color: 'bg-green-100 text-green-600' },
-    { title: isAr ? 'عمليات المزامنة' : 'Sync Operations', value: dataStats.syncs.toString(), trend: 'Last 7 days', icon: Activity, color: 'bg-purple-100 text-purple-600' },
-    { title: isAr ? 'دقة الذكاء الاصطناعي' : 'AI Accuracy', value: '95%', trend: '+0%', icon: BarChart3, color: 'bg-amber-100 text-amber-600' },
+    { title: isAr ? 'المراسيم المستخرجة' : 'Décrets extraits', value: dataStats.decrees.toString(), trend: '+0%', icon: FileText, color: 'bg-blue-100 text-blue-600' },
+    { title: isAr ? 'الشخصيات المسجلة' : 'Personnes enregistrées', value: dataStats.persons.toString(), trend: '+0%', icon: Users, color: 'bg-green-100 text-green-600' },
+    { title: isAr ? 'عمليات المزامنة' : 'Opérations de synchronisation', value: dataStats.syncs.toString(), trend: isAr ? 'آخر 7 أيام' : '7 derniers jours', icon: Activity, color: 'bg-purple-100 text-purple-600' },
+    { title: isAr ? 'دقة الذكاء الاصطناعي' : 'Précision de l\'IA', value: '95%', trend: '+0%', icon: BarChart3, color: 'bg-amber-100 text-amber-600' },
   ];
 
   return (
     <div className="w-full">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{isAr ? 'نظرة عامة على النظام' : 'System Overview'}</h1>
-        <p className="text-gray-500 mt-1">{isAr ? 'مراقبة أداء المنصة ومعالجة الذكاء الاصطناعي' : 'Monitor platform performance and AI processing'}</p>
+        <h1 className="text-2xl font-bold text-gray-900">{isAr ? 'نظرة عامة على النظام' : 'Vue d\'ensemble du système'}</h1>
+        <p className="text-gray-500 mt-1">{isAr ? 'مراقبة أداء المنصة ومعالجة الذكاء الاصطناعي' : 'Surveiller les performances de la plateforme et le traitement de l\'IA'}</p>
       </div>
 
       {/* Stats Grid */}
@@ -70,13 +70,13 @@ export default function AdminDashboard({ params }: { params: Promise<{ locale: s
         {/* Recent Activity */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm col-span-2">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-900">{isAr ? 'أحدث المعالجات (الذكاء الاصطناعي)' : 'Recent AI Processing'}</h2>
-            <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">{isAr ? 'عرض الكل' : 'View All'}</button>
+            <h2 className="text-lg font-bold text-gray-900">{isAr ? 'أحدث المعالجات (الذكاء الاصطناعي)' : 'Traitements récents (IA)'}</h2>
+            <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">{isAr ? 'عرض الكل' : 'Voir tout'}</button>
           </div>
           <div className="divide-y divide-gray-100">
             {logs.length === 0 ? (
               <div className="p-8 text-center text-gray-500 text-sm">
-                {isAr ? 'لا توجد سجلات مزامنة بعد.' : 'No sync logs yet.'}
+                {isAr ? 'لا توجد سجلات مزامنة بعد.' : 'Aucun journal de synchronisation.'}
               </div>
             ) : (
               logs.map((job, i) => (
@@ -89,7 +89,7 @@ export default function AdminDashboard({ params }: { params: Promise<{ locale: s
                     )}
                     <div>
                       <p className="text-sm font-medium text-gray-900">{job.file_name}</p>
-                      <p className="text-xs text-gray-500">{job.error_message || (isAr ? 'اكتمل استخراج البيانات' : 'Data extraction completed')}</p>
+                      <p className="text-xs text-gray-500">{job.error_message || (isAr ? 'اكتمل استخراج البيانات' : 'Extraction de données terminée')}</p>
                     </div>
                   </div>
                   <span className="text-xs text-gray-400">
@@ -104,12 +104,12 @@ export default function AdminDashboard({ params }: { params: Promise<{ locale: s
         {/* System Health */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="p-6 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-900">{isAr ? 'حالة النظام' : 'System Health'}</h2>
+            <h2 className="text-lg font-bold text-gray-900">{isAr ? 'حالة النظام' : 'État du système'}</h2>
           </div>
           <div className="p-6 space-y-6">
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">{isAr ? 'اتصال قاعدة البيانات' : 'Database Connection'}</span>
+                <span className="text-sm font-medium text-gray-700">{isAr ? 'اتصال قاعدة البيانات' : 'Connexion base de données'}</span>
                 <span className="text-xs text-green-600 font-bold bg-green-50 px-2 py-1 rounded-full">Online</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2">
@@ -119,7 +119,7 @@ export default function AdminDashboard({ params }: { params: Promise<{ locale: s
             
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">{isAr ? 'حصة الذكاء الاصطناعي (Gemini)' : 'AI Quota (Gemini)'}</span>
+                <span className="text-sm font-medium text-gray-700">{isAr ? 'حصة الذكاء الاصطناعي (Gemini)' : 'Quota IA (Gemini)'}</span>
                 <span className="text-xs text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded-full">78%</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2">
@@ -129,7 +129,7 @@ export default function AdminDashboard({ params }: { params: Promise<{ locale: s
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">{isAr ? 'مساحة التخزين (PDFs)' : 'Storage (PDFs)'}</span>
+                <span className="text-sm font-medium text-gray-700">{isAr ? 'مساحة التخزين (PDFs)' : 'Stockage (PDFs)'}</span>
                 <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-full">42%</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2">

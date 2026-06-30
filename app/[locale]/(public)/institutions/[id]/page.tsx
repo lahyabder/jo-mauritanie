@@ -77,6 +77,24 @@ export default async function InstitutionProfilePage({
     .order('appointment_date', { ascending: false })
     .limit(30);
 
+  // Documents issued by this institution
+  const { data: issuedDocs } = await supabase
+    .from('documents')
+    .select('id, title_ar, title_fr, type, official_number, document_date')
+    .eq('institution_id', id)
+    .order('document_date', { ascending: false })
+    .limit(10);
+
+  // Documents mentioning this institution
+  const { data: mentionedIn } = await supabase
+    .from('document_institutions')
+    .select(`
+      role_ar, role_type,
+      document:document_id ( id, title_ar, title_fr, type, official_number, document_date )
+    `)
+    .eq('institution_id', id)
+    .limit(15);
+
   const name = isAr ? inst.name_ar : (inst.name_fr || inst.name_ar);
   const description = isAr ? inst.description_ar : (inst.description_fr || inst.description_ar);
   const catInfo = CATEGORY_LABELS[inst.category] ?? CATEGORY_LABELS['other'];
@@ -299,6 +317,78 @@ export default async function InstitutionProfilePage({
               </div>
             </section>
           )}
+
+          {/* Documents Issued & Mentioned */}
+          {(issuedDocs && issuedDocs.length > 0) || (mentionedIn && mentionedIn.length > 0) ? (
+            <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+              <div className="flex items-center mb-6 border-b border-gray-100 pb-4">
+                <FileText className={`${isAr ? 'ml-3' : 'mr-3'} w-6 h-6 text-brand-red`} />
+                <h2 className="text-xl font-bold text-gray-900">
+                  {isAr ? 'النصوص والوثائق' : 'Textes et Documents'}
+                </h2>
+              </div>
+              
+              <div className="space-y-8">
+                {issuedDocs && issuedDocs.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-brand-green"></span>
+                      {isAr ? 'نصوص صادرة عن المؤسسة' : 'Textes émis'}
+                    </h3>
+                    <ul className="space-y-3 border-s-2 border-gray-100 ms-1 ps-4">
+                      {issuedDocs.map((doc: any) => (
+                        <li key={doc.id}>
+                          <Link href={`/${locale}/documents/${doc.id}`} className="group block">
+                            <h4 className="text-sm font-bold text-gray-900 group-hover:text-brand-green transition-colors">
+                              {isAr ? doc.title_ar : (doc.title_fr || doc.title_ar)}
+                            </h4>
+                            <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                              <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium">
+                                {doc.official_number || doc.type}
+                              </span>
+                              {doc.document_date && <span>{doc.document_date}</span>}
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {mentionedIn && mentionedIn.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-brand-red"></span>
+                      {isAr ? 'نصوص ورد فيها ذكر المؤسسة' : 'Textes mentionnant l\'institution'}
+                    </h3>
+                    <ul className="space-y-3 border-s-2 border-gray-100 ms-1 ps-4">
+                      {mentionedIn.map((item: any, i: number) => {
+                        const doc = item.document;
+                        if (!doc) return null;
+                        return (
+                          <li key={i}>
+                            <Link href={`/${locale}/documents/${doc.id}`} className="group block">
+                              <h4 className="text-sm font-bold text-gray-900 group-hover:text-brand-red transition-colors line-clamp-2">
+                                {isAr ? doc.title_ar : (doc.title_fr || doc.title_ar)}
+                              </h4>
+                              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                                {item.role_ar && (
+                                  <span className="bg-orange-50 text-orange-700 px-2 py-0.5 rounded font-medium border border-orange-100">
+                                    {isAr ? item.role_ar : item.role_type}
+                                  </span>
+                                )}
+                                <span>{doc.document_date}</span>
+                              </div>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         {/* Right: Relations & Sub-entities */}

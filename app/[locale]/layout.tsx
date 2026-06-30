@@ -2,7 +2,26 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
+import { Metadata } from 'next';
 import '../globals.css';
+
+export const metadata: Metadata = {
+  title: { 
+    default: 'الجريدة الرسمية الموريتانية', 
+    template: '%s | JOM' 
+  },
+  description: 'نسخة رقمية من الجريدة الرسمية الموريتانية - تصفح القوانين والمراسيم',
+  openGraph: { 
+    title: 'الجريدة الرسمية الموريتانية', 
+    description: 'نسخة رقمية من الجريدة الرسمية الموريتانية - تصفح القوانين والمراسيم', 
+    images: ['/og-image.png'] 
+  },
+  alternates: { 
+    canonical: 'https://jomauritanie.net', 
+    languages: { 'ar': '/ar', 'fr': '/fr' } 
+  },
+  robots: { index: true, follow: true },
+};
 
 export default async function LocaleLayout({
   children,

@@ -2672,6 +2672,12 @@ CREATE POLICY "Allow public read access on kg_edges" ON public.kg_edges FOR SELE
 
 
 -- =========================================================
+-- FILE: 017_add_progress_to_sync_logs.sql
+-- =========================================================
+ALTER TABLE public.sync_logs ADD COLUMN IF NOT EXISTS progress INTEGER DEFAULT 0;
+
+
+-- =========================================================
 -- FILE: 017_knowledge_layer.sql
 -- =========================================================
 -- Migration: 017_knowledge_layer.sql
@@ -2902,6 +2908,35 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.sync_logs;
 
 
 -- =========================================================
+-- FILE: 019_fix_data_visibility.sql
+-- =========================================================
+-- ============================================================
+-- Fix existing data visibility: update old records to pass RLS
+-- ============================================================
+
+-- 1. Fix issues: set is_published = true where status = 'published'
+UPDATE public.issues
+SET is_published = TRUE
+WHERE (is_published = FALSE OR is_published IS NULL)
+  AND (status = 'published' OR status IS NULL);
+
+-- 2. Fix documents: set status='published', is_current_version=true, is_confidential=false
+UPDATE public.documents
+SET
+  status             = 'published',
+  is_current_version = TRUE,
+  is_confidential    = FALSE
+WHERE status IN ('active', 'pending', 'draft')
+   OR is_current_version IS DISTINCT FROM TRUE;
+
+-- 3. Verify
+SELECT 'issues visible' AS label, COUNT(*) FROM public.issues WHERE is_published = TRUE
+UNION ALL
+SELECT 'documents visible', COUNT(*) FROM public.documents
+WHERE status = 'published' AND is_current_version = TRUE AND is_confidential = FALSE;
+
+
+-- =========================================================
 -- FILE: 019_storage_bucket.sql
 -- =========================================================
 -- ============================================================
@@ -2938,5 +2973,19 @@ CREATE POLICY "Service role update gazette-pdfs"
 CREATE POLICY "Service role delete gazette-pdfs"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'gazette-pdfs');
+
+
+-- =========================================================
+-- FILE: 020_issue_language.sql
+-- =========================================================
+-- Add language column to issues table
+ALTER TABLE public.issues
+ADD COLUMN IF NOT EXISTS language language_code NOT NULL DEFAULT 'ar';
+
+-- Add an index on the new column since we will filter by it often
+CREATE INDEX IF NOT EXISTS idx_issues_language ON public.issues(language);
+
+-- Notify PostgREST to reload schema cache
+NOTIFY pgrst, 'reload schema';
 
 

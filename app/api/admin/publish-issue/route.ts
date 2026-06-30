@@ -101,6 +101,7 @@ export async function GET() {
       .select(`
         id,
         issue_number,
+        language,
         publication_date,
         is_published,
         pdf_url,
@@ -135,6 +136,74 @@ export async function GET() {
 
     return NextResponse.json(enriched);
   } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/admin/publish-issue
+ * Body: { issue_id: string }
+ * Deletes an issue and its associated documents, appointments, etc.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = createAdminClient();
+    const body = await request.json();
+    const { issue_id } = body;
+
+    if (!issue_id) {
+      return NextResponse.json({ error: 'Missing issue_id' }, { status: 400 });
+    }
+
+    // Because 'documents' has ON DELETE RESTRICT on issue_id, we must delete documents first.
+    // 'documents' deletion will cascade to appointment_history (if ON DELETE CASCADE is set for instrument_document_id)
+    // Actually, to be safe, delete appointment_history explicitly first
+    await supabase.from('appointment_history').delete().eq('instrument_issue_id', issue_id);
+    
+    // Delete documents
+    await supabase.from('documents').delete().eq('issue_id', issue_id);
+    
+    // Delete sync logs
+    await supabase.from('sync_logs').delete().eq('issue_id', issue_id);
+    
+    // Delete the issue itself
+    const { error: issueErr } = await supabase.from('issues').delete().eq('id', issue_id);
+
+    if (issueErr) {
+      return NextResponse.json({ error: `Failed to delete issue: ${issueErr.message}` }, { status: 500 });
+    }
+
+    // --- Clean up orphan persons and institutions ---
+    
+    // Clean orphan persons
+    const { data: orphanPersons } = await supabase
+      .from('persons')
+      .select('id, appointment_history!left(id)');
+      
+    const orphanPersonIds = (orphanPersons || [])
+      .filter((p: any) => !p.appointment_history || p.appointment_history.length === 0)
+      .map((p: any) => p.id);
+      
+    if (orphanPersonIds.length > 0) {
+      await supabase.from('persons').delete().in('id', orphanPersonIds);
+    }
+    
+    // Clean orphan institutions
+    const { data: orphanInstitutions } = await supabase
+      .from('institutions')
+      .select('id, appointment_history!left(id)');
+      
+    const orphanInstIds = (orphanInstitutions || [])
+      .filter((i: any) => !i.appointment_history || i.appointment_history.length === 0)
+      .map((i: any) => i.id);
+      
+    if (orphanInstIds.length > 0) {
+      await supabase.from('institutions').delete().in('id', orphanInstIds);
+    }
+
+    return NextResponse.json({ success: true, message: 'Issue and all related documents deleted successfully.' });
+  } catch (err: any) {
+    console.error('[delete-issue] Error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

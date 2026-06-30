@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:bulk": "node scripts/bulk_sync.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -26,6 +27,7 @@
     "next": "16.2.9",
     "next-intl": "^4.13.0",
     "node-fetch": "^3.3.2",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^6.0.227",
     "pg": "^8.22.0",

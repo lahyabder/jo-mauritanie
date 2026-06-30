@@ -4,20 +4,9 @@ import { useState, use } from 'react';
 import { Activity, Bell, CheckCircle2, XCircle, AlertTriangle, Play, RefreshCw, Mail, Webhook, Rss } from 'lucide-react';
 import Link from 'next/link';
 
-// Mock logs data
-const SYNC_LOGS = [
-  { id: 0, date: new Date().toISOString().split('T')[0] + ' 10:15:00', status: 'success', issue: 'N° 1606', duration: '145s', confidence: '99%', alerts: 3 },
-  { id: 1, date: '2024-12-01 06:00:00', status: 'success', issue: 'N° 1451', duration: '45s', confidence: '98%', alerts: 2 },
-  { id: 2, date: '2024-11-15 06:00:00', status: 'warning', issue: 'N° 1450', duration: '62s', confidence: '85%', alerts: 5 },
-  { id: 3, date: '2024-11-01 06:00:00', status: 'error', issue: 'N° 1449', duration: '12s', confidence: '0%', errorMsg: 'PDF Parsing Failed', alerts: 0 },
-];
-
-const RECENT_ALERTS = [
-  { id: 0, type: 'CRAWLER', message: 'تم اكتشاف وتحميل ومعالجة العدد رقم 1606 الصادر بتاريخ 30/05/2026 بنجاح.', time: 'الآن', color: 'bg-indigo-100 text-indigo-700' },
-  { id: 1, type: 'LAW', message: 'قانون جديد: تمت إضافة قانون مكافحة الفساد.', time: 'منذ ساعتين', color: 'bg-indigo-100 text-indigo-700' },
-  { id: 2, type: 'APPOINTMENT', message: 'تعيينات: تم رصد 3 تعيينات جديدة في وزارة العدل.', time: 'منذ ساعتين', color: 'bg-emerald-100 text-emerald-700' },
-  { id: 3, type: 'CONFLICT', message: 'تنبيه ذكاء اصطناعي: المادة 4 من المرسوم الجديد تتعارض مع قانون سابق.', time: 'منذ ساعتين', color: 'bg-amber-100 text-amber-700' },
-];
+// Empty mock data (ready for real DB connection)
+const SYNC_LOGS: any[] = [];
+const RECENT_ALERTS: any[] = [];
 
 export default function SyncLogsDashboard({ params }: { params: Promise<{ locale: string }> }) {
   const resolvedParams = use(params);
@@ -112,19 +101,27 @@ export default function SyncLogsDashboard({ params }: { params: Promise<{ locale
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {SYNC_LOGS.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{log.date}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.issue}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {log.status === 'success' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><CheckCircle2 className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'نجاح' : 'Success'}</span>}
-                      {log.status === 'warning' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"><AlertTriangle className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'تحذير' : 'Warning'}</span>}
-                      {log.status === 'error' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'خطأ' : 'Error'}</span>}
+                {SYNC_LOGS.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
+                      {isAr ? 'لا توجد مزامنات سابقة بعد.' : 'No sync logs yet.'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.confidence}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{log.alerts}</td>
                   </tr>
-                ))}
+                ) : (
+                  SYNC_LOGS.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{log.date}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.issue}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {log.status === 'success' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><CheckCircle2 className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'نجاح' : 'Success'}</span>}
+                        {log.status === 'warning' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"><AlertTriangle className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'تحذير' : 'Warning'}</span>}
+                        {log.status === 'error' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1 ml-1" /> {isAr ? 'خطأ' : 'Error'}</span>}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{log.confidence}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{log.alerts}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -141,18 +138,26 @@ export default function SyncLogsDashboard({ params }: { params: Promise<{ locale
           </div>
           
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 space-y-4">
-             {RECENT_ALERTS.map(alert => (
-               <div key={alert.id} className="pb-4 border-b border-gray-100 last:border-0 last:pb-0">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${alert.color}`}>{alert.type}</span>
-                    <span className="text-xs text-gray-400">{alert.time}</span>
-                  </div>
-                  <p className="text-sm text-gray-800 mt-2 font-medium">{alert.message}</p>
+             {RECENT_ALERTS.length === 0 ? (
+               <div className="text-center py-8 text-gray-500 text-sm">
+                 {isAr ? 'لا توجد تنبيهات ذكية حالياً.' : 'No active alerts.'}
                </div>
-             ))}
-             <button className="w-full mt-4 py-2 bg-gray-50 hover:bg-gray-100 text-sm font-semibold text-indigo-600 rounded-xl transition-colors border border-gray-200">
-               {isAr ? 'عرض كل التنبيهات' : 'View all alerts'}
-             </button>
+             ) : (
+               <>
+                 {RECENT_ALERTS.map(alert => (
+                   <div key={alert.id} className="pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${alert.color}`}>{alert.type}</span>
+                        <span className="text-xs text-gray-400">{alert.time}</span>
+                      </div>
+                      <p className="text-sm text-gray-800 mt-2 font-medium">{alert.message}</p>
+                   </div>
+                 ))}
+                 <button className="w-full mt-4 py-2 bg-gray-50 hover:bg-gray-100 text-sm font-semibold text-indigo-600 rounded-xl transition-colors border border-gray-200">
+                   {isAr ? 'عرض كل التنبيهات' : 'View all alerts'}
+                 </button>
+               </>
+             )}
           </div>
         </div>
       </div>

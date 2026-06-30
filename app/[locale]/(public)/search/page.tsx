@@ -53,12 +53,12 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
         <div className="max-w-4xl mx-auto relative z-10 text-center">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6 flex items-center justify-center gap-4">
              <SearchIcon className="w-10 h-10 text-indigo-400" />
-             {isAr ? 'البحث الدلالي الذكي' : 'Semantic Search Engine'}
+             {isAr ? 'البحث الدلالي الذكي' : 'Recherche Sémantique Intelligente'}
           </h1>
           <p className="text-lg text-slate-400 mb-10 max-w-2xl mx-auto">
             {isAr 
               ? 'ابحث بالمعنى وليس بالكلمات فقط. يدعم البحث عن القوانين، المراسيم، التعيينات، والمؤسسات باللغتين العربية والفرنسية.'
-              : 'Search by meaning, not just keywords. Supports searching laws, decrees, appointments, and institutions in both Arabic and French.'}
+              : 'Recherche par sens, pas seulement par mots-clés. Prend en charge la recherche de lois, décrets, nominations et institutions en arabe et en français.'}
           </p>
           
           <form onSubmit={handleSearch} className="relative max-w-3xl mx-auto">
@@ -66,7 +66,7 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
               type="text" 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={isAr ? 'مثال: "قوانين تنظيم الجمعيات المدنية" أو "تعيينات وزارة الصحة 2023"' : 'e.g., "Laws regulating civil associations"'}
+              placeholder={isAr ? 'مثال: "قوانين تنظيم الجمعيات المدنية" أو "تعيينات وزارة الصحة 2023"' : 'ex: "Lois régissant les associations civiles" ou "Nominations santé 2023"'}
               className="w-full pl-6 pr-16 py-5 text-lg bg-white/10 border border-white/20 text-white placeholder-slate-400 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none backdrop-blur-sm"
             />
             <button 
@@ -78,7 +78,10 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
           </form>
           
           <div className="flex flex-wrap justify-center gap-3 mt-6">
-             {['الكل', 'قوانين', 'مراسيم', 'أشخاص', 'مؤسسات'].map(f => (
+             {(isAr 
+                ? ['الكل', 'قوانين', 'مراسيم', 'أشخاص', 'مؤسسات']
+                : ['Tout', 'Lois', 'Décrets', 'Personnes', 'Institutions']
+             ).map(f => (
                <button key={f} className="px-4 py-1.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-sm font-medium hover:bg-slate-700 transition-colors">
                  {f}
                </button>
@@ -93,7 +96,7 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
         {!hasSearched ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center text-gray-500 flex flex-col items-center">
             <SearchIcon className="w-16 h-16 text-gray-200 mb-4" />
-            <p className="text-lg">{isAr ? 'ابدأ البحث للحصول على نتائج دقيقة من الجريدة الرسمية' : 'Start typing to get precise results from the Official Gazette'}</p>
+            <p className="text-lg">{isAr ? 'ابدأ البحث للحصول على نتائج دقيقة من الجريدة الرسمية' : 'Commencez à taper pour obtenir des résultats précis du Journal Officiel'}</p>
           </div>
         ) : isSearching ? (
           <div className="space-y-4">
@@ -108,9 +111,9 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
         ) : (
           <div className="space-y-4">
              <div className="flex justify-between items-center mb-6 text-sm text-gray-500">
-               <span>{isAr ? 'تم العثور على' : 'Found'} <b className="text-gray-900">{results.length}</b> {isAr ? 'نتيجة' : 'results'}</span>
+               <span>{isAr ? 'تم العثور على' : 'Trouvé(s)'} <b className="text-gray-900">{results.length}</b> {isAr ? 'نتيجة' : 'résultat(s)'}</span>
                <button className="flex items-center text-indigo-600 font-medium hover:text-indigo-700">
-                 <Filter className="w-4 h-4 mr-1 ml-1" /> {isAr ? 'تصفية متقدمة' : 'Advanced Filters'}
+                 <Filter className="w-4 h-4 mr-1 ml-1" /> {isAr ? 'تصفية متقدمة' : 'Filtres avancés'}
                </button>
              </div>
              
@@ -123,7 +126,7 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
                      </Link>
                    </h3>
                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-md border border-indigo-100">
-                     {isAr ? 'تطابق نصي' : 'Keyword Match'}
+                     {isAr ? 'تطابق نصي' : 'Correspondance textuelle'}
                    </span>
                  </div>
                  
@@ -139,11 +142,11 @@ export default function SemanticSearchPage({ params }: { params: Promise<{ local
                  
                  <div className="pt-4 border-t border-gray-50 flex gap-4">
                     <Link href={`/${locale}/documents/${result.id}`} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-                      {isAr ? 'قراءة التحليل النصي' : 'Read Text Analysis'}
+                      {isAr ? 'قراءة التحليل النصي' : 'Lire l\'analyse du texte'}
                     </Link>
                     {result.pdf_url && (
                       <Link href={result.pdf_url} target="_blank" className="text-sm font-semibold text-rose-600 hover:text-rose-700 flex items-center">
-                        <FileText className="w-4 h-4 mr-1 ml-1" /> {isAr ? 'عرض ملف PDF الأصلي' : 'View Original PDF'}
+                        <FileText className="w-4 h-4 mr-1 ml-1" /> {isAr ? 'عرض ملف PDF الأصلي' : 'Voir le PDF original'}
                       </Link>
                     )}
                  </div>

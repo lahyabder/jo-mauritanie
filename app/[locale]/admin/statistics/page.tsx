@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase/client';
 import { BarChart3, TrendingUp, Users, BookOpen } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-export default function StatisticsPage({ params }: { params: Promise<{ locale: string }> }) {
+export default function AdminStatisticsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = use(params);
   const isAr = locale === 'ar';
   
@@ -69,11 +69,11 @@ export default function StatisticsPage({ params }: { params: Promise<{ locale: s
   const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
 
   return (
-    <div className="max-w-6xl mx-auto py-10 px-4 sm:px-6" dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="w-full" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="flex justify-between items-center mb-8 border-b border-gray-200 pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-            <BarChart3 className={`w-8 h-8 text-indigo-600 ${isAr ? 'ml-3' : 'mr-3'}`} />
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            <BarChart3 className={`w-7 h-7 text-indigo-600 ${isAr ? 'ml-3' : 'mr-3'}`} />
             {isAr ? 'الإحصائيات والتحليلات' : 'Statistics & Analytics'}
           </h1>
           <p className="mt-2 text-gray-500 max-w-2xl">

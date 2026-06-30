@@ -68,7 +68,7 @@ export default async function PersonProfilePage({
 
   // Count document appearances via appointments
   const { count: mentionCount } = await supabase
-    .from('appointments')
+    .from('appointment_history')
     .select('id', { count: 'exact', head: true })
     .eq('person_id', id);
 
