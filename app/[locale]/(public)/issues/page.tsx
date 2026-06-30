@@ -31,7 +31,7 @@ export default function IssuesPage({ params }: { params: Promise<{ locale: strin
           documents ( count )
         `)
         .eq('language', locale)
-        .order('publication_date', { ascending: false });
+        .order('issue_number', { ascending: false });
         
       if (error) {
         setErrorMsg(error.message);

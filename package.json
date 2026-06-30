@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "sync:bulk": "node scripts/bulk_sync.js"
+    "lint": "next lint",
+    "sync:bulk": "node scripts/bulk_sync.js",
+    "sync:retry": "node scripts/reprocess_empty.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
