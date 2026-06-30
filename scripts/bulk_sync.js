@@ -285,8 +285,7 @@ async function insertToSupabase(extracted, fileName) {
       original_text: doc.original_text,
       ai_summary_ar: doc.ai_summary_ar,
       keywords: doc.keywords || [],
-      status: doc.status || 'active',
-      confidence_score: doc.confidence_score
+      status: doc.status || 'active'
     }).select().single();
     
     if (dErr) console.error(`  Failed doc ${doc.local_id}:`, dErr.message);

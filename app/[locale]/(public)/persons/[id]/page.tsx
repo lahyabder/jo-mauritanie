@@ -80,7 +80,14 @@ export default async function PersonProfilePage({
   const currentInst = person.institutions as any;
 
   return (
-    <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8" dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen bg-[#fafafa] relative overflow-hidden" dir={isAr ? 'rtl' : 'ltr'}>
+      {/* Background ambient gradients */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-5%] -left-20 w-96 h-96 bg-indigo-300/20 rounded-full blur-[100px] animate-pulse"></div>
+        <div className="absolute bottom-[-5%] -right-20 w-96 h-96 bg-purple-300/20 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }}></div>
+      </div>
+      
+      <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 relative z-10">
       {/* Back Button */}
       <div className="mb-8">
         <Link
@@ -97,9 +104,12 @@ export default async function PersonProfilePage({
       </div>
 
       {/* Header Profile */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-10">
-        <div className="h-32 bg-gradient-to-r from-slate-800 to-slate-700" />
-        <div className="px-8 pb-8">
+      <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white overflow-hidden mb-10 transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+        <div className="h-40 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 relative overflow-hidden">
+           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+           <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-white/20 rounded-full blur-3xl"></div>
+        </div>
+        <div className="px-8 pb-8 relative z-10">
           <div className="relative flex justify-between items-end -mt-16 mb-6">
             {/* Avatar */}
             <div className="w-32 h-32 bg-white rounded-xl shadow-md p-1 flex items-center justify-center border border-gray-100">
